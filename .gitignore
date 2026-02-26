@@ -1,0 +1,31 @@
+node_modules/
+dist/
+
+# Environment
+.env
+.env.*
+
+# Claude Code
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.bak

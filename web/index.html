@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reactome MCP Server Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <svg viewBox="0 0 40 40" width="40" height="40">
+          <circle cx="20" cy="20" r="18" fill="#2E86AB" />
+          <circle cx="20" cy="12" r="4" fill="white" />
+          <circle cx="12" cy="24" r="4" fill="white" />
+          <circle cx="28" cy="24" r="4" fill="white" />
+          <line x1="20" y1="16" x2="14" y2="21" stroke="white" stroke-width="2" />
+          <line x1="20" y1="16" x2="26" y2="21" stroke="white" stroke-width="2" />
+          <line x1="14" y1="24" x2="26" y2="24" stroke="white" stroke-width="2" />
+        </svg>
+        <h1>Reactome MCP Server</h1>
+      </div>
+      <p class="subtitle">Pathway Analysis & Exploration Tools</p>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="analysis">
+        <span class="tab-icon">🧬</span>
+        Pathway Enrichment
+      </button>
+      <button class="tab" data-tab="search">
+        <span class="tab-icon">🔍</span>
+        Search
+      </button>
+      <button class="tab" data-tab="pathway">
+        <span class="tab-icon">🗺️</span>
+        Pathway Explorer
+      </button>
+      <button class="tab" data-tab="utilities">
+        <span class="tab-icon">📊</span>
+        Utilities
+      </button>
+      <button class="tab" data-tab="tools">
+        <span class="tab-icon">🛠️</span>
+        All Tools
+      </button>
+    </nav>
+
+    <!-- Pathway Enrichment Tab -->
+    <section id="analysis" class="tab-content active">
+      <div class="card">
+        <h2>Pathway Enrichment Analysis</h2>
+        <p class="description">
+          Enter a list of gene symbols or protein identifiers to find over-represented pathways.
+          This performs a statistical analysis to identify which biological pathways are enriched in your gene list.
+        </p>
+
+        <div class="input-group">
+          <label for="gene-input">Gene/Protein Identifiers</label>
+          <textarea id="gene-input" placeholder="Enter genes (one per line or comma-separated)&#10;&#10;Example:&#10;TP53&#10;BRCA1&#10;EGFR&#10;KRAS&#10;MYC"></textarea>
+          <div class="example-buttons">
+            <span>Try examples:</span>
+            <button class="example-btn" data-genes="TP53,BRCA1,BRCA2,ATM,CHEK2,PALB2">DNA Repair</button>
+            <button class="example-btn" data-genes="EGFR,KRAS,BRAF,MEK1,ERK1,ERK2">MAPK Signaling</button>
+            <button class="example-btn" data-genes="IL6,TNF,IL1B,NFKB1,STAT3,JAK2">Inflammation</button>
+            <button class="example-btn" data-genes="BCL2,BAX,CASP3,CASP9,CYCS,APAF1">Apoptosis</button>
+          </div>
+        </div>
+
+        <div class="options-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="include-interactors">
+            Include protein interactors
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="include-disease" checked>
+            Include disease pathways
+          </label>
+        </div>
+
+        <button id="analyze-btn" class="primary-btn">
+          <span class="btn-text">Analyze Pathways</span>
+          <span class="btn-loading hidden">
+            <span class="spinner"></span>
+            Analyzing...
+          </span>
+        </button>
+      </div>
+
+      <div id="analysis-results" class="results-container hidden">
+        <div class="results-header">
+          <h3>Analysis Results</h3>
+          <div class="results-meta">
+            <span id="result-count"></span>
+            <span id="result-token" class="token-badge"></span>
+          </div>
+        </div>
+        <div id="results-table-container"></div>
+      </div>
+    </section>
+
+    <!-- Search Tab -->
+    <section id="search" class="tab-content">
+      <div class="card">
+        <h2>Search Reactome</h2>
+        <p class="description">
+          Search for pathways, reactions, proteins, genes, and other entities in the Reactome database.
+        </p>
+
+        <div class="search-box">
+          <input type="text" id="search-input" placeholder="Search for pathways, genes, proteins...">
+          <button id="search-btn" class="search-submit">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+              <line x1="16" y1="16" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="search-filters">
+          <select id="species-filter">
+            <option value="">All Species</option>
+            <option value="Homo sapiens" selected>Homo sapiens</option>
+            <option value="Mus musculus">Mus musculus</option>
+            <option value="Rattus norvegicus">Rattus norvegicus</option>
+            <option value="Danio rerio">Danio rerio</option>
+            <option value="Drosophila melanogaster">Drosophila melanogaster</option>
+          </select>
+          <select id="type-filter">
+            <option value="">All Types</option>
+            <option value="Pathway">Pathways</option>
+            <option value="Reaction">Reactions</option>
+            <option value="Protein">Proteins</option>
+            <option value="Complex">Complexes</option>
+          </select>
+        </div>
+
+        <div class="quick-searches">
+          <span>Quick searches:</span>
+          <button class="quick-btn" data-query="cell cycle">Cell Cycle</button>
+          <button class="quick-btn" data-query="apoptosis">Apoptosis</button>
+          <button class="quick-btn" data-query="immune system">Immune System</button>
+          <button class="quick-btn" data-query="metabolism">Metabolism</button>
+        </div>
+      </div>
+
+      <div id="search-results" class="results-container hidden"></div>
+    </section>
+
+    <!-- Pathway Explorer Tab -->
+    <section id="pathway" class="tab-content">
+      <div class="card">
+        <h2>Pathway Explorer</h2>
+        <p class="description">
+          Explore pathway details, view diagrams, and navigate the pathway hierarchy.
+        </p>
+
+        <div class="pathway-input-group">
+          <input type="text" id="pathway-id-input" placeholder="Enter pathway ID (e.g., R-HSA-109581)">
+          <button id="load-pathway-btn" class="primary-btn">Load Pathway</button>
+        </div>
+
+        <div class="top-pathways">
+          <h4>Top-Level Pathways (Homo sapiens)</h4>
+          <div id="top-pathways-list" class="pathway-chips"></div>
+        </div>
+      </div>
+
+      <div id="pathway-details" class="results-container hidden">
+        <div class="pathway-header">
+          <h3 id="pathway-name"></h3>
+          <span id="pathway-stid" class="pathway-id-badge"></span>
+        </div>
+        <div id="pathway-content"></div>
+        <div id="pathway-diagram-container" class="diagram-container"></div>
+      </div>
+    </section>
+
+    <!-- Utilities Tab -->
+    <section id="utilities" class="tab-content">
+      <div class="utilities-grid">
+        <div class="card utility-card">
+          <h3>🌍 Species</h3>
+          <p>List all species in Reactome with curated or inferred pathways.</p>
+          <div class="utility-options">
+            <label class="checkbox-label">
+              <input type="checkbox" id="main-species-only">
+              Main species only
+            </label>
+          </div>
+          <button class="primary-btn utility-btn" data-action="species">Load Species</button>
+          <div id="species-results" class="utility-results hidden"></div>
+        </div>
+
+        <div class="card utility-card">
+          <h3>🦠 Diseases</h3>
+          <p>List all diseases annotated in Reactome pathways.</p>
+          <button class="primary-btn utility-btn" data-action="diseases">Load Diseases</button>
+          <div id="diseases-results" class="utility-results hidden"></div>
+        </div>
+
+        <div class="card utility-card">
+          <h3>🗄️ Database Info</h3>
+          <p>Get current Reactome database version and statistics.</p>
+          <button class="primary-btn utility-btn" data-action="dbinfo">Load Info</button>
+          <div id="dbinfo-results" class="utility-results hidden"></div>
+        </div>
+
+        <div class="card utility-card">
+          <h3>🔗 Identifier Mapping</h3>
+          <p>Map an external identifier (UniProt, Ensembl, etc.) to Reactome pathways.</p>
+          <div class="mapping-inputs">
+            <select id="mapping-resource">
+              <option value="UniProt">UniProt</option>
+              <option value="Ensembl">Ensembl</option>
+              <option value="NCBI">NCBI Gene</option>
+              <option value="ChEBI">ChEBI</option>
+              <option value="HGNC">HGNC</option>
+            </select>
+            <input type="text" id="mapping-id" placeholder="e.g., P04637 (TP53)">
+          </div>
+          <button class="primary-btn utility-btn" data-action="mapping">Map Identifier</button>
+          <div id="mapping-results" class="utility-results hidden"></div>
+        </div>
+
+        <div class="card utility-card">
+          <h3>🧬 Interactors</h3>
+          <p>Find protein-protein interactions for a given accession.</p>
+          <input type="text" id="interactor-id" placeholder="UniProt ID (e.g., P04637)">
+          <button class="primary-btn utility-btn" data-action="interactors">Find Interactors</button>
+          <div id="interactors-results" class="utility-results hidden"></div>
+        </div>
+
+        <div class="card utility-card">
+          <h3>🧫 Complex Lookup</h3>
+          <p>Find all complexes containing a specific protein.</p>
+          <input type="text" id="complex-id" placeholder="UniProt ID (e.g., P04637)">
+          <button class="primary-btn utility-btn" data-action="complexes">Find Complexes</button>
+          <div id="complexes-results" class="utility-results hidden"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- All Tools Tab -->
+    <section id="tools" class="tab-content">
+      <div class="card">
+        <h2>Available MCP Tools</h2>
+        <p class="description">
+          This MCP server provides 53 tools for interacting with Reactome. Below is a categorized list of all available tools.
+        </p>
+      </div>
+
+      <div class="tools-grid">
+        <div class="tool-category">
+          <h3>🧬 Analysis Tools</h3>
+          <ul>
+            <li><code>reactome_analyze_identifier</code> - Analyze single gene/protein</li>
+            <li><code>reactome_analyze_identifiers</code> - Batch enrichment analysis</li>
+            <li><code>reactome_get_analysis_result</code> - Retrieve results by token</li>
+            <li><code>reactome_analysis_found_entities</code> - Get matched entities</li>
+            <li><code>reactome_analysis_not_found</code> - Get unmatched identifiers</li>
+            <li><code>reactome_analysis_resources</code> - Resource summary</li>
+            <li><code>reactome_compare_species</code> - Cross-species comparison</li>
+            <li><code>reactome_analysis_pathway_sizes</code> - Size distribution</li>
+            <li><code>reactome_filter_analysis_pathways</code> - Filter by pathway</li>
+          </ul>
+        </div>
+
+        <div class="tool-category">
+          <h3>🗺️ Pathway Tools</h3>
+          <ul>
+            <li><code>reactome_get_pathway</code> - Get pathway details</li>
+            <li><code>reactome_top_pathways</code> - List top-level pathways</li>
+            <li><code>reactome_pathway_ancestors</code> - Get pathway hierarchy</li>
+            <li><code>reactome_pathway_contained_events</code> - List sub-events</li>
+            <li><code>reactome_pathways_for_entity</code> - Find pathways for entity</li>
+            <li><code>reactome_diagram_pathways_for_entity</code> - Pathways with diagrams</li>
+            <li><code>reactome_events_hierarchy</code> - Full event tree</li>
+          </ul>
+        </div>
+
+        <div class="tool-category">
+          <h3>🔍 Search Tools</h3>
+          <ul>
+            <li><code>reactome_search</code> - Full-text search</li>
+            <li><code>reactome_search_paginated</code> - Paginated search</li>
+            <li><code>reactome_search_suggest</code> - Auto-complete</li>
+            <li><code>reactome_search_spellcheck</code> - Spelling suggestions</li>
+            <li><code>reactome_search_facets</code> - Get search facets</li>
+            <li><code>reactome_search_pathways_of</code> - Find pathways for entity</li>
+            <li><code>reactome_search_diagram</code> - Search within diagram</li>
+          </ul>
+        </div>
+
+        <div class="tool-category">
+          <h3>🧫 Entity Tools</h3>
+          <ul>
+            <li><code>reactome_get_entity</code> - Get entity details</li>
+            <li><code>reactome_complex_subunits</code> - List complex components</li>
+            <li><code>reactome_entity_other_forms</code> - Get variant forms</li>
+            <li><code>reactome_entity_component_of</code> - Find containers</li>
+            <li><code>reactome_participants</code> - Event participants</li>
+            <li><code>reactome_participating_physical_entities</code> - Physical entities</li>
+            <li><code>reactome_reference_entities</code> - External references</li>
+            <li><code>reactome_complexes_containing</code> - Find complexes</li>
+          </ul>
+        </div>
+
+        <div class="tool-category">
+          <h3>📤 Export Tools</h3>
+          <ul>
+            <li><code>reactome_export_diagram</code> - Export as PNG/SVG/JPG</li>
+            <li><code>reactome_export_reaction</code> - Export reaction diagram</li>
+            <li><code>reactome_export_fireworks</code> - Pathway overview</li>
+            <li><code>reactome_export_sbgn</code> - Export to SBGN</li>
+            <li><code>reactome_export_sbml</code> - Export to SBML</li>
+            <li><code>reactome_export_pdf</code> - Export documentation</li>
+            <li><code>reactome_export_analysis_report</code> - PDF report</li>
+            <li><code>reactome_export_analysis_csv</code> - CSV export</li>
+            <li><code>reactome_export_analysis_json</code> - JSON export</li>
+          </ul>
+        </div>
+
+        <div class="tool-category">
+          <h3>🔗 Interactor Tools</h3>
+          <ul>
+            <li><code>reactome_psicquic_resources</code> - List PSICQUIC services</li>
+            <li><code>reactome_psicquic_summary</code> - Interaction summary</li>
+            <li><code>reactome_psicquic_details</code> - Interaction details</li>
+            <li><code>reactome_static_interactors</code> - Curated interactions</li>
+            <li><code>reactome_interactor_pathways</code> - Interactor pathways</li>
+            <li><code>reactome_interactor_summary</code> - Interaction count</li>
+          </ul>
+        </div>
+
+        <div class="tool-category">
+          <h3>⚙️ Utility Tools</h3>
+          <ul>
+            <li><code>reactome_species</code> - List species</li>
+            <li><code>reactome_diseases</code> - List diseases</li>
+            <li><code>reactome_database_info</code> - Database version</li>
+            <li><code>reactome_mapping_pathways</code> - Map to pathways</li>
+            <li><code>reactome_mapping_reactions</code> - Map to reactions</li>
+            <li><code>reactome_orthology</code> - Get orthologues</li>
+            <li><code>reactome_query</code> - Generic query</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- MCP Call Log Panel -->
+    <div id="mcp-log-panel" class="mcp-log-panel">
+      <div class="mcp-log-header">
+        <h3>🔌 MCP Protocol Log</h3>
+        <div class="mcp-log-controls">
+          <button id="clear-log-btn" class="log-control-btn">Clear</button>
+          <button id="toggle-log-btn" class="log-control-btn">Minimize</button>
+        </div>
+      </div>
+      <div id="mcp-log-content" class="mcp-log-content">
+        <div class="mcp-log-empty">
+          <p>MCP calls will appear here as you interact with the interface.</p>
+          <p>Try clicking "Load Species" in the Utilities tab!</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>
+        <strong>Reactome MCP Server</strong> - Model Context Protocol integration for
+        <a href="https://reactome.org" target="_blank">Reactome</a>
+      </p>
+      <p class="footer-meta">
+        Database version: <span id="db-version">Loading...</span>
+      </p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

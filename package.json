@@ -1,0 +1,38 @@
+{
+  "name": "reactome-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Reactome pathway database - analysis, search, and exploration tools",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "reactome-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "inspect": "npx @anthropic-ai/mcp-inspector node dist/index.js",
+    "demo": "node web/mcp-bridge.js",
+    "demo:simple": "node web/server.js"
+  },
+  "keywords": [
+    "mcp",
+    "reactome",
+    "pathway",
+    "bioinformatics",
+    "enrichment-analysis"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
