@@ -1,0 +1,17 @@
+{
+  "name": "Reactome",
+  "version": "89",
+  "releaseDate": "2024-11-07",
+  "gkCurrent": {
+    "dbId": 1,
+    "displayName": "2024-11-07",
+    "name": "2024-11-07",
+    "releaseDate": "2024-11-07"
+  },
+  "previousVersion": {
+    "dbId": 1,
+    "displayName": "2024-08-07",
+    "name": "2024-08-07",
+    "releaseDate": "2024-08-07"
+  }
+}

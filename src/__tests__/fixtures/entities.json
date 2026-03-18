@@ -1,0 +1,58 @@
+[
+  {
+    "dbId": 113418,
+    "stId": "R-HSA-113418",
+    "displayName": "Ubiquitin",
+    "name": "Ubiquitin",
+    "className": "SimpleEntity",
+    "referenceEntity": {
+      "dbId": 1234567,
+      "stId": "R-ALL-1234567",
+      "displayName": "Ubiquitin",
+      "identifier": "P0CG47",
+      "databaseName": "UniProt"
+    },
+    "speciesName": "Homo sapiens",
+    "taxId": 9606
+  },
+  {
+    "dbId": 68739,
+    "stId": "R-HSA-68739",
+    "displayName": "TP53 [nucleoplasm]",
+    "name": "TP53",
+    "className": "EntityWithAccessionedSequence",
+    "referenceEntity": {
+      "dbId": 1234568,
+      "stId": "R-ALL-1234568",
+      "displayName": "TP53",
+      "identifier": "P04637",
+      "databaseName": "UniProt"
+    },
+    "speciesName": "Homo sapiens",
+    "taxId": 9606,
+    "compartment": {
+      "displayName": "nucleoplasm",
+      "identifier": "GO:0005654"
+    }
+  },
+  {
+    "dbId": 48887,
+    "stId": "R-HSA-48887",
+    "displayName": "BRCA1 [cytoplasm]",
+    "name": "BRCA1",
+    "className": "EntityWithAccessionedSequence",
+    "referenceEntity": {
+      "dbId": 1234569,
+      "stId": "R-ALL-1234569",
+      "displayName": "BRCA1",
+      "identifier": "P38398",
+      "databaseName": "UniProt"
+    },
+    "speciesName": "Homo sapiens",
+    "taxId": 9606,
+    "compartment": {
+      "displayName": "cytoplasm",
+      "identifier": "GO:0005737"
+    }
+  }
+]

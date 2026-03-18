@@ -1,0 +1,60 @@
+{
+  "summary": {
+    "token": "MDA4MTk4",
+    "percentage": 2.43,
+    "identifiers": {
+      "total": 41,
+      "found": 40,
+      "notFound": 1,
+      "notValid": 0
+    }
+  },
+  "pathways": [
+    {
+      "dbId": 162582,
+      "stId": "R-HSA-162582",
+      "displayName": "Signal Transduction",
+      "name": "Signal Transduction",
+      "species": "Homo sapiens",
+      "entities": {
+        "total": 3462,
+        "found": 45,
+        "ratio": 0.013,
+        "pValue": 1.2e-8,
+        "fdr": 2.3e-7
+      },
+      "reactions": {
+        "total": 892,
+        "found": 12,
+        "ratio": 0.0135
+      },
+      "interactors": {
+        "total": 1245,
+        "found": 8
+      }
+    },
+    {
+      "dbId": 168256,
+      "stId": "R-HSA-168256",
+      "displayName": "Immune System",
+      "name": "Immune System",
+      "species": "Homo sapiens",
+      "entities": {
+        "total": 2845,
+        "found": 38,
+        "ratio": 0.0134,
+        "pValue": 3.4e-7,
+        "fdr": 4.5e-6
+      },
+      "reactions": {
+        "total": 756,
+        "found": 10,
+        "ratio": 0.0132
+      },
+      "interactors": {
+        "total": 987,
+        "found": 6
+      }
+    }
+  ]
+}

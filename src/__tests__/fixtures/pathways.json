@@ -1,0 +1,60 @@
+[
+  {
+    "dbId": 162582,
+    "stId": "R-HSA-162582",
+    "displayName": "Signal Transduction",
+    "name": "Signal Transduction",
+    "className": "Pathway",
+    "systemicName": "Signal Transduction",
+    "species": {
+      "displayName": "Homo sapiens",
+      "taxId": 9606
+    },
+    "isDisease": false,
+    "diagram": {
+      "stId": "R-HSA-162582",
+      "displayName": "Signal Transduction"
+    },
+    "events": [
+      {
+        "dbId": 168256,
+        "stId": "R-HSA-168256",
+        "displayName": "Immune System"
+      },
+      {
+        "dbId": 1640170,
+        "stId": "R-HSA-1640170",
+        "displayName": "Cell Cycle"
+      }
+    ]
+  },
+  {
+    "dbId": 168256,
+    "stId": "R-HSA-168256",
+    "displayName": "Immune System",
+    "name": "Immune System",
+    "className": "Pathway",
+    "systemicName": "Immune System",
+    "species": {
+      "displayName": "Homo sapiens",
+      "taxId": 9606
+    },
+    "isDisease": false,
+    "diagram": {
+      "stId": "R-HSA-168256",
+      "displayName": "Immune System"
+    },
+    "events": [
+      {
+        "dbId": 168249,
+        "stId": "R-HSA-168249",
+        "displayName": "Innate Immune System"
+      },
+      {
+        "dbId": 168250,
+        "stId": "R-HSA-168250",
+        "displayName": "Adaptive Immune System"
+      }
+    ]
+  }
+]

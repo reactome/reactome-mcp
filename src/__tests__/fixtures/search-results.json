@@ -1,0 +1,46 @@
+{
+  "query": "ubiquitin",
+  "results": [
+    {
+      "dbId": 113418,
+      "displayName": "Ubiquitin",
+      "name": "Ubiquitin",
+      "className": "SimpleEntity",
+      "species": "Homo sapiens",
+      "speciesName": "Homo sapiens",
+      "databaseName": "UniProt",
+      "identifier": "P0CG47"
+    },
+    {
+      "dbId": 3065676,
+      "displayName": "Ubiquitination",
+      "name": "Ubiquitination",
+      "className": "ReactionlikeEvent",
+      "species": "Homo sapiens",
+      "speciesName": "Homo sapiens",
+      "databaseName": "Reactome",
+      "identifier": "R-HSA-3068457"
+    },
+    {
+      "dbId": 3069016,
+      "displayName": "Ubiquitin-specific protease 7",
+      "name": "Ubiquitin-specific protease 7",
+      "className": "Protein",
+      "species": "Homo sapiens",
+      "speciesName": "Homo sapiens",
+      "databaseName": "UniProt",
+      "identifier": "O75326"
+    }
+  ],
+  "facets": {
+    "types": [
+      { "name": "SimpleEntity", "count": 45 },
+      { "name": "Protein", "count": 78 },
+      { "name": "ReactionlikeEvent", "count": 12 }
+    ],
+    "species": [
+      { "name": "Homo sapiens", "count": 120 },
+      { "name": "Mus musculus", "count": 85 }
+    ]
+  }
+}

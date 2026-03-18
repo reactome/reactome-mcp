@@ -1,0 +1,32 @@
+[
+  {
+    "dbId": 9651339,
+    "displayName": "Acute myeloid leukemia (AML)",
+    "name": "Acute myeloid leukemia",
+    "identifier": "DOID:9119"
+  },
+  {
+    "dbId": 9651340,
+    "displayName": "Alzheimer disease",
+    "name": "Alzheimer disease",
+    "identifier": "DOID:10652"
+  },
+  {
+    "dbId": 9651341,
+    "displayName": "Breast cancer",
+    "name": "Breast cancer",
+    "identifier": "DOID:1612"
+  },
+  {
+    "dbId": 9651342,
+    "displayName": "Colorectal cancer",
+    "name": "Colorectal cancer",
+    "identifier": "DOID:9256"
+  },
+  {
+    "dbId": 9651343,
+    "displayName": "Diabetes mellitus type 2",
+    "name": "Diabetes mellitus type 2",
+    "identifier": "DOID:9352"
+  }
+]
