@@ -1,6 +1,7 @@
 import { ANALYSIS_SERVICE_URL, REQUEST_TIMEOUT, HEAVY_REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY_MS } from "../config.js";
 import { ServiceError, TimeoutError, NetworkError } from "../utils/errors.js";
-import { logApiCall } from "../utils/logging.js";
+import { logApiCall, logCacheOperation } from "../utils/logging.js";
+import { caches } from "../utils/cache.js";
 
 export class AnalysisClient {
   private baseUrl: string;
@@ -535,6 +536,36 @@ export class AnalysisClient {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Clear all caches
+   */
+  clearCaches(): void {
+    caches.species.clear();
+    caches.diseases.clear();
+    caches.dbInfo.clear();
+    caches.search.clear();
+    caches.pathways.clear();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): {
+    species: ReturnType<typeof caches.species.getStats>;
+    diseases: ReturnType<typeof caches.diseases.getStats>;
+    dbInfo: ReturnType<typeof caches.dbInfo.getStats>;
+    search: ReturnType<typeof caches.search.getStats>;
+    pathways: ReturnType<typeof caches.pathways.getStats>;
+  } {
+    return {
+      species: caches.species.getStats(),
+      diseases: caches.diseases.getStats(),
+      dbInfo: caches.dbInfo.getStats(),
+      search: caches.search.getStats(),
+      pathways: caches.pathways.getStats(),
+    };
   }
 }
 

@@ -1,6 +1,7 @@
 import { CONTENT_SERVICE_URL, REQUEST_TIMEOUT, HEAVY_REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY_MS } from "../config.js";
 import { ServiceError, TimeoutError, NetworkError } from "../utils/errors.js";
-import { logApiCall } from "../utils/logging.js";
+import { logApiCall, logCacheOperation } from "../utils/logging.js";
+import { caches } from "../utils/cache.js";
 
 export class ContentClient {
   private baseUrl: string;
@@ -23,6 +24,28 @@ export class ContentClient {
     this.heavyRequestTimeout = options?.heavyRequestTimeout ?? HEAVY_REQUEST_TIMEOUT;
     this.maxRetries = options?.maxRetries ?? MAX_RETRIES;
     this.retryDelayMs = options?.retryDelayMs ?? RETRY_DELAY_MS;
+  }
+
+  /**
+   * Get value from cache if available
+   */
+  private getCached<T>(cacheName: 'species' | 'diseases' | 'dbInfo', key: string): T | undefined {
+    const cache = caches[cacheName];
+    const startTime = Date.now();
+    const cached = cache.get(key as any) as T | undefined;
+    const duration = Date.now() - startTime;
+
+    logCacheOperation('get', `${cacheName}:${key}`, !!cached, duration);
+    return cached;
+  }
+
+  /**
+   * Set value in cache
+   */
+  private setCached<T>(cacheName: 'species' | 'diseases' | 'dbInfo', key: string, value: T): void {
+    const cache = caches[cacheName];
+    cache.set(key as any, value);
+    logCacheOperation('set', `${cacheName}:${key}`, undefined, undefined);
   }
 
   async get<T>(
@@ -427,6 +450,93 @@ export class ContentClient {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get all species (cached for 1 hour)
+   */
+  async getSpecies<T>(): Promise<T> {
+    // Check cache first
+    const cached = this.getCached<T>('species', 'all');
+    if (cached) {
+      return cached;
+    }
+
+    // Fetch from API
+    const result = await this.get<T>('/species');
+
+    // Cache result
+    this.setCached<T>('species', 'all', result);
+
+    return result;
+  }
+
+  /**
+   * Get all diseases (cached for 1 hour)
+   */
+  async getDiseases<T>(): Promise<T> {
+    // Check cache first
+    const cached = this.getCached<T>('diseases', 'all');
+    if (cached) {
+      return cached;
+    }
+
+    // Fetch from API
+    const result = await this.get<T>('/diseases');
+
+    // Cache result
+    this.setCached<T>('diseases', 'all', result);
+
+    return result;
+  }
+
+  /**
+   * Get database information (cached for 24 hours)
+   */
+  async getDatabaseInfo<T>(): Promise<T> {
+    // Check cache first
+    const cached = this.getCached<T>('dbInfo', 'current');
+    if (cached) {
+      return cached;
+    }
+
+    // Fetch from API
+    const result = await this.get<T>('/databaseName');
+
+    // Cache result
+    this.setCached<T>('dbInfo', 'current', result);
+
+    return result;
+  }
+
+  /**
+   * Clear all caches
+   */
+  clearCaches(): void {
+    caches.species.clear();
+    caches.diseases.clear();
+    caches.dbInfo.clear();
+    caches.search.clear();
+    caches.pathways.clear();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): {
+    species: ReturnType<typeof caches.species.getStats>;
+    diseases: ReturnType<typeof caches.diseases.getStats>;
+    dbInfo: ReturnType<typeof caches.dbInfo.getStats>;
+    search: ReturnType<typeof caches.search.getStats>;
+    pathways: ReturnType<typeof caches.pathways.getStats>;
+  } {
+    return {
+      species: caches.species.getStats(),
+      diseases: caches.diseases.getStats(),
+      dbInfo: caches.dbInfo.getStats(),
+      search: caches.search.getStats(),
+      pathways: caches.pathways.getStats(),
+    };
   }
 }
 
