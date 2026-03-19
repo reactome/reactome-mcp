@@ -9,8 +9,10 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:test": "tsc -p tsconfig.test.json",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
+    "test": "npm run build:test && node dist-test/test/run-tests.js",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
     "demo": "node web/mcp-bridge.js",
     "demo:simple": "node web/server.js"

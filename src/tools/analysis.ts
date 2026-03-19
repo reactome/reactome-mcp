@@ -11,6 +11,8 @@ import type {
   Bin,
 } from "../types/index.js";
 
+const analysisTokenSchema = z.string().trim().min(1).describe("Analysis token from a previous analysis");
+
 function formatPathwaySummary(pathway: PathwaySummary): string {
   return [
     `- **${pathway.name}** (${pathway.stId})`,
@@ -104,7 +106,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_get_analysis_result",
     "Retrieve a previously computed analysis result using its token. Allows filtering and pagination.",
     {
-      token: z.string().describe("Analysis token from a previous analysis"),
+      token: analysisTokenSchema,
       species: z.string().optional().describe("Filter by species"),
       sort_by: z.enum(["NAME", "TOTAL_ENTITIES", "FOUND_ENTITIES", "ENTITIES_PVALUE", "ENTITIES_FDR", "ENTITIES_RATIO"]).optional().default("ENTITIES_PVALUE").describe("Sort field"),
       order: z.enum(["ASC", "DESC"]).optional().default("ASC").describe("Sort order"),
@@ -133,7 +135,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analysis_found_entities",
     "Get the identifiers that were found in a specific pathway from an analysis result.",
     {
-      token: z.string().describe("Analysis token"),
+      token: analysisTokenSchema,
       pathway: z.string().describe("Pathway stable ID (e.g., R-HSA-109582)"),
       resource: z.string().optional().default("TOTAL").describe("Resource filter (TOTAL, UNIPROT, ENSEMBL, etc.)"),
     },
@@ -169,7 +171,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analysis_not_found",
     "Get the list of identifiers that could not be mapped in an analysis.",
     {
-      token: z.string().describe("Analysis token"),
+      token: analysisTokenSchema,
       page: z.number().optional().default(1).describe("Page number"),
       page_size: z.number().optional().default(100).describe("Results per page"),
     },
@@ -197,7 +199,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analysis_resources",
     "Get a summary of the molecule types (resources) found in an analysis.",
     {
-      token: z.string().describe("Analysis token"),
+      token: analysisTokenSchema,
     },
     async ({ token }) => {
       const result = await analysisClient.get<ResourceSummary[]>(`/token/${token}/resources`);
@@ -244,7 +246,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analysis_pathway_sizes",
     "Get the distribution of pathway sizes (binned) from an analysis result.",
     {
-      token: z.string().describe("Analysis token"),
+      token: analysisTokenSchema,
       bin_size: z.number().optional().default(100).describe("Bin size for grouping pathway sizes"),
       species: z.string().optional().describe("Filter by species"),
       resource: z.string().optional().default("TOTAL").describe("Resource filter"),
@@ -275,7 +277,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_filter_analysis_pathways",
     "Filter an analysis result to only include specific pathways.",
     {
-      token: z.string().describe("Analysis token"),
+      token: analysisTokenSchema,
       pathways: z.array(z.string()).describe("List of pathway stable IDs to include"),
       resource: z.string().optional().default("TOTAL").describe("Resource filter"),
       p_value: z.number().optional().describe("p-value threshold"),
