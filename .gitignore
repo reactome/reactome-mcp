@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-test/
 
 # Environment
 .env
@@ -29,3 +30,5 @@ coverage/
 # Temporary files
 *.tmp
 *.bak
+
+CHANGELOG.md
