@@ -3,7 +3,8 @@ dist/
 
 # Environment
 .env
-.env.*
+.env.local
+.env.*.local
 
 # Claude Code
 .claude/

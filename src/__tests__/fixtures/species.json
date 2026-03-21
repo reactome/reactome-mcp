@@ -1,0 +1,37 @@
+[
+  {
+    "dbId": 48887,
+    "displayName": "Homo sapiens",
+    "name": "Homo sapiens",
+    "taxId": 9606,
+    "abbreviation": "HSA"
+  },
+  {
+    "dbId": 48892,
+    "displayName": "Mus musculus",
+    "name": "Mus musculus",
+    "taxId": 10090,
+    "abbreviation": "MMU"
+  },
+  {
+    "dbId": 48893,
+    "displayName": "Rattus norvegicus",
+    "name": "Rattus norvegicus",
+    "taxId": 10116,
+    "abbreviation": "RNO"
+  },
+  {
+    "dbId": 48894,
+    "displayName": "Gallus gallus",
+    "name": "Gallus gallus",
+    "taxId": 9031,
+    "abbreviation": "GGA"
+  },
+  {
+    "dbId": 48895,
+    "displayName": "Caenorhabditis elegans",
+    "name": "Caenorhabditis elegans",
+    "taxId": 6239,
+    "abbreviation": "CEL"
+  }
+]
