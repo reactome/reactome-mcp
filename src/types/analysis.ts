@@ -9,9 +9,11 @@ export interface AnalysisResult {
   warnings?: string[];
 }
 
+import { AnalysisType } from "./enums";
+
 export interface AnalysisSummary {
   token: string;
-  type: "OVERREPRESENTATION" | "EXPRESSION" | "SPECIES_COMPARISON";
+  type: AnalysisType;
   sampleName?: string;
   species: number;
   speciesName?: string;
