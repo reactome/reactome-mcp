@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { contentClient } from "../clients/content.js";
+import { hybridSearch } from "../utils/hybrid-search.js";
+import { logger } from "../utils/logger.js";
 import type { SearchResult, SearchEntry, FacetEntry } from "../types/index.js";
 
 interface SpellcheckResult {
@@ -330,6 +332,81 @@ export function registerSearchTools(server: McpServer) {
       return {
         content: [{ type: "text", text: lines.join("\n") }],
       };
+    }
+  );
+
+  // Hybrid search with fallback
+  server.tool(
+    "reactome_search_hybrid",
+    "Search using hybrid retrieval system (embedding + fallback). Returns merged and deduplicated results with confidence scores.",
+    {
+      query: z.string().describe("Search term (gene name, protein, pathway name, disease, etc.)"),
+      species: z.string().optional().describe("Filter by species (e.g., 'Homo sapiens', 'Mus musculus')"),
+      types: z.array(z.string()).optional().describe("Filter by type (Pathway, Reaction, Protein, Gene, Complex, etc.)"),
+      compartments: z.array(z.string()).optional().describe("Filter by cellular compartment"),
+      rows: z.number().optional().default(25).describe("Number of results to return"),
+      confidence_threshold: z.number().optional().default(0.5).describe("Minimum confidence score (0-1)"),
+      use_embedding: z.boolean().optional().default(true).describe("Try embedding-based search first"),
+    },
+    async ({ query, species, types, compartments, rows, confidence_threshold, use_embedding }) => {
+      try {
+        const result = await hybridSearch(query, {
+          topK: rows,
+          species,
+          types,
+          compartments,
+          useEmbedding: use_embedding,
+          confidenceThreshold: confidence_threshold,
+        });
+
+        const lines = [
+          `## Hybrid Search Results for "${query}"`,
+          `**Found:** ${result.uniqueResults} unique results`,
+          result.entries.some(e => e.source === "embedding") ? `**Embedding results included:** Yes` : "",
+          result.entries.some(e => e.source === "search") ? `**Search API results included:** Yes` : "",
+          "",
+        ];
+
+        // Add result entries with confidence scores
+        result.entries.slice(0, rows).forEach(entry => {
+          const confidenceBar = "[" + "█".repeat(Math.round((entry.confidence ?? 0.5) * 10)) + "░".repeat(10 - Math.round((entry.confidence ?? 0.5) * 10)) + "]";
+          lines.push(
+            `- **${entry.name}** (${entry.stId}) [${entry.source}] ${confidenceBar} ${((entry.confidence ?? 0) * 100).toFixed(0)}%`,
+            `  - Type: ${entry.exactType}`,
+          );
+
+          if (entry.species && entry.species.length > 0) {
+            lines.push(`  - Species: ${entry.species.join(", ")}`);
+          }
+
+          if (entry.summation) {
+            const summary = entry.summation.length > 150 ? entry.summation.substring(0, 150) + "..." : entry.summation;
+            lines.push(`  - ${summary}`);
+          }
+
+          lines.push("");
+        });
+
+        if (result.uniqueResults > rows) {
+          lines.push(`*Showing ${Math.min(rows, result.entries.length)} of ${result.uniqueResults} results*`);
+        }
+
+        return {
+          content: [{ type: "text", text: lines.join("\n") }],
+        };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        logger.error("reactome_search_hybrid", errorMsg);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `## Error During Hybrid Search\n\n${errorMsg}\n\nPlease try again or use standard search.`,
+            },
+          ],
+        };
+      }
     }
   );
 }
