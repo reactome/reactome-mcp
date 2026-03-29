@@ -2,6 +2,12 @@
 
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that exposes the [Reactome](https://reactome.org/) pathway knowledgebase to AI assistants. It wraps Reactome's Content Service and Analysis Service REST APIs, giving LLMs the ability to search, browse, analyse, and export biological pathway data through natural language.
 
+This project implements an advanced Retrieval-Augmented Generation (RAG) system on top of Reactome data. It introduces a query understanding module that classifies user intent and decomposes complex biological questions into retrievable sub-queries, improving retrieval quality.
+
+Additionally, it includes a citation and verification layer that ensures all generated answers are grounded in Reactome by automatically attaching and validating pathway IDs using the Reactome REST API.
+
+The result is a more accurate, interpretable, and trustworthy biological question-answering system.
+
 ## Features
 
 - **Pathway enrichment analysis** — submit gene/protein lists and retrieve over-representation results, including p-values, FDR, and found/not-found identifiers
@@ -12,6 +18,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - **Export** — diagrams (PNG/SVG/JPG/GIF), SBGN, SBML, PDF reports, and CSV/JSON analysis results
 - **Species & disease** — list available species and disease annotations
 - **ID mapping** — map external identifiers (UniProt, Ensembl, CHEBI, etc.) to Reactome pathways and reactions
+- **RAG Pipeline** — advanced retrieval-augmented generation with query understanding, citation verification, and Reactome-grounded answers
 
 Over 40 tools and 10 resources are registered — see [Tools](#tools) and [Resources](#resources) below for the full list.
 
@@ -164,6 +171,14 @@ Starts a local web UI with an MCP bridge for browser-based exploration.
 | `reactome_mapping_reactions` | Map an external identifier to reactions |
 | `reactome_orthology` | Get orthologous events/entities in another species |
 | `reactome_query` | Query any Reactome database object by identifier |
+
+### RAG Pipeline (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `reactome_query_understanding` | Analyze biological queries to classify intent and decompose into sub-queries |
+| `reactome_citation_verification` | Verify citations in answers and ensure grounding in Reactome data |
+| `reactome_rag_pipeline` | Complete RAG pipeline: understanding → retrieval → generation → verification |
 
 ## Resources
 
