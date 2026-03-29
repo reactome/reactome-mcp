@@ -9,6 +9,9 @@ import { registerSearchTools } from "./search.js";
 import { registerEntityTools } from "./entity.js";
 import { registerExportTools } from "./export.js";
 import { registerInteractorTools } from "./interactors.js";
+import { understandQuery } from "../queryUnderstanding.js";
+import { verifyCitations } from "../citationVerification.js";
+import { runRAGPipeline } from "../ragPipeline.js";
 
 export function registerAllTools(server: McpServer) {
   // Register tools from all modules
@@ -217,6 +220,55 @@ function registerUtilityTools(server: McpServer) {
         : `/data/query/enhanced/${encodeURIComponent(id)}`;
 
       const result = await contentClient.get<Record<string, unknown>>(endpoint);
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Query understanding for biological RAG chatbot
+  server.tool(
+    "reactome_query_understanding",
+    "Analyze a biological query to classify its intent and decompose it into sub-queries for RAG retrieval.",
+    {
+      query: z.string().describe("The natural language biological query to analyze"),
+    },
+    async ({ query }) => {
+      const result = await understandQuery(query);
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Citation and verification for biological RAG chatbot
+  server.tool(
+    "reactome_citation_verification",
+    "Verify citations in LLM-generated answers and ensure all biological claims are grounded in valid Reactome data.",
+    {
+      answer: z.string().describe("The LLM-generated answer to verify"),
+      context: z.string().describe("The retrieved biological context with Reactome IDs"),
+    },
+    async ({ answer, context }) => {
+      const result = await verifyCitations(answer, context);
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Complete RAG pipeline for biological queries
+  server.tool(
+    "reactome_rag_pipeline",
+    "Run the complete RAG pipeline: query understanding, retrieval, answer generation, and citation verification.",
+    {
+      query: z.string().describe("The user's biological query"),
+    },
+    async ({ query }) => {
+      const result = await runRAGPipeline(query);
 
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
