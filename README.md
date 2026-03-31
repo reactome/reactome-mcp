@@ -1,3 +1,55 @@
+## 🚀 Experimental Extension: Multi-Step Query Orchestration
+
+This fork extends the original Reactome MCP server by introducing a lightweight orchestration layer for multi-step biological query execution.
+
+> **Note:** The core MCP implementation remains unchanged. All extensions are implemented as an external orchestration layer within the `orchestrator/` directory of this repository.
+
+### What the Orchestration Layer Adds
+
+| Module | Role |
+|---|---|
+| `orchestrator/planner.py` | Converts a natural-language query → structured JSON execution plan |
+| `orchestrator/executor.py` | Executes plan steps sequentially or in parallel; resolves `$step.field` references between steps |
+| `orchestrator/mock_adapter.py` | Simulates Reactome MCP tools by name (swap in the real client with zero executor changes) |
+| `orchestrator/demo.py` | Runs a full end-to-end demonstration — no API key or running server required |
+
+### Supported Query Patterns
+
+```
+Compare TP53 and BRCA1              → parallel enrichment analysis of both genes
+Find apoptosis pathways for BCL2    → 3-step sequential chain (search → analyse → pathway detail)
+Analyse EGFR                        → single-step pathway enrichment
+Search PTEN signaling               → single-step full-text search
+```
+
+### Quick Start
+
+```bash
+# No extra dependencies — uses Python standard library only
+cd orchestrator
+python demo.py
+```
+
+### Architecture
+
+```
+User Query
+    │
+    ▼
+┌─────────────┐      structured plan (JSON)     ┌──────────────┐
+│  planner.py │ ──────────────────────────────► │  executor.py │
+└─────────────┘                                  └──────┬───────┘
+                                                        │  tool call (name + input)
+                                                        ▼
+                                                ┌────────────────────┐
+                                                │  mock_adapter.py   │
+                                                │  (→ real MCP client│
+                                                │    in production)  │
+                                                └────────────────────┘
+```
+
+---
+
 # reactome-mcp
 
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that exposes the [Reactome](https://reactome.org/) pathway knowledgebase to AI assistants. It wraps Reactome's Content Service and Analysis Service REST APIs, giving LLMs the ability to search, browse, analyse, and export biological pathway data through natural language.
