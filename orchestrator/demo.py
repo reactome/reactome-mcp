@@ -1,7 +1,5 @@
 """
-demo.py
--------
-End-to-end demonstration of the Reactome MCP Orchestration Layer.
+Real demonstration of the Reactome MCP Orchestration Layer calls.
 
 Run from inside the orchestrator/ directory:
 
@@ -17,8 +15,8 @@ What it does
 2. Runs four representative queries that cover every execution mode.
 3. Prints a formatted summary of plans and results to stdout.
 
-No network access, API keys, or running MCP server is required – the
-mock_adapter.py module simulates all Reactome tool responses locally.
+Network access is required – the real_adapter.py module calls the Reactome
+REST APIs (Content and Analysis services) directly.
 """
 
 from __future__ import annotations
@@ -107,9 +105,9 @@ def main() -> None:
     print(c("bold", "  Reactome MCP Orchestration Layer  --  Demo"))
     print(c("bold", DIVIDER))
     print(
-        "  This demo runs the Planner -> Executor pipeline entirely offline.\n"
-        "  Tool calls are handled by mock_adapter.py which mirrors the real\n"
-        "  MCP tool names so the orchestration layer is drop-in replaceable.\n"
+        "  This demo runs the Planner -> Executor pipeline with REAL API calls.\n"
+        "  Tool calls are handled by real_adapter.py which calls the Reactome\n"
+        "  REST APIs directly, mirroring the production MCP server behavior.\n"
     )
 
     overall_start = time.perf_counter()

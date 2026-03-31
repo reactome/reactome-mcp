@@ -27,7 +27,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from mock_adapter import call_tool
+from real_adapter import call_tool
 
 
 class Executor:
