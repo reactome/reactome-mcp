@@ -11,7 +11,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
-    "inspect": "npx @anthropic-ai/mcp-inspector node dist/index.js",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
     "demo": "node web/mcp-bridge.js",
     "demo:simple": "node web/server.js"
   },
