@@ -1,0 +1,31 @@
+# Changelog
+
+All notable changes to this project are documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.1.0] — 2026-04-21
+
+### Added
+- **Opt-in Neo4j Cypher tools** (`reactome_cypher_query`, `reactome_cypher_schema`, `reactome_cypher_sample`), registered only when `NEO4J_URI` is set. Sessions run in READ mode so write clauses are rejected by the server. Defaults match the [`reactome_neo4j_env`](https://github.com/reactome/reactome_neo4j_env) Docker image (auth-disabled, database `graph.db`).
+- **`reactome://graph/schema` resource** — exposes labels, relationship types, and per-label property keys so clients can plan queries without a round-trip through the tool layer.
+- **`REACTOME_BASE_URL` env var** — override the Content Service / Analysis Service base URL (e.g. point at a staging or release-specific host). Finer-grained `REACTOME_CONTENT_SERVICE_URL` / `REACTOME_ANALYSIS_SERVICE_URL` also honored.
+- **Retry with exponential backoff** for all REST calls. Retries 429 and 5xx with jittered backoff; honors `Retry-After`. Up to 3 attempts.
+- **Structured JSON logging** on stderr. Configurable via `LOG_LEVEL` (`debug`/`info`/`warn`/`error`). stdout is reserved for the MCP protocol.
+- **Per-row and total-response size caps** on `reactome_cypher_query` (`max_row_chars`, `max_total_chars`), so a single wide node can't blow the LLM context budget. Over-wide rows are replaced with a summary object listing keys + original size.
+- **Test suite** (Vitest) and **GitHub Actions CI** — typecheck + tests on Node 18/20/22.
+- **`prepare` script + `files` whitelist** so `npm install` from a clone auto-builds and `npm publish` ships only `dist/`, `README`, and `LICENSE`.
+
+### Changed
+- Server version reported as `1.1.0` in MCP handshake.
+- Web demo (`web/mcp-bridge.js`) CORS is now allow-listed (defaults to localhost). Override with `ALLOWED_ORIGINS=…` (comma-separated) or `ALLOWED_ORIGINS=*` to explicitly opt in to wildcard.
+
+### Fixed
+- Integer Cypher parameters (e.g. the `$limit` in `MATCH (n) RETURN n LIMIT $limit`) are now coerced to the driver's Integer wrapper in `runRead`. Without this, Neo4j 4.3 rejects the query because JS `number` serializes as Float64 over Bolt.
+
+### Security
+- Non-localhost `NEO4J_URI` with an unset `NEO4J_PASSWORD` now logs a warning at driver init.
+
+## [1.0.0] — Initial release
+
+- 40+ tools wrapping Reactome's Content Service and Analysis Service REST APIs.
+- 10 MCP resources (static + templated).
+- stdio transport.

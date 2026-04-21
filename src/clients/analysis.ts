@@ -1,4 +1,5 @@
 import { ANALYSIS_SERVICE_URL } from "../config.js";
+import { fetchWithRetry } from "./http.js";
 
 export class AnalysisClient {
   private baseUrl: string;
@@ -8,21 +9,25 @@ export class AnalysisClient {
   }
 
   private resolvePath(path: string): URL {
-    const relativePath = path.startsWith('/') ? path.slice(1) : path;
+    const relativePath = path.startsWith("/") ? path.slice(1) : path;
     return new URL(relativePath, this.baseUrl);
+  }
+
+  private applyParams(url: URL, params?: Record<string, string | number | boolean | undefined>) {
+    if (!params) return;
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        url.searchParams.set(key, String(value));
+      }
+    });
   }
 
   async get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
     const url = this.resolvePath(path);
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.set(key, String(value));
-        }
-      });
-    }
+    this.applyParams(url, params);
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithRetry(url.toString(), {
+      service: "analysis",
       headers: { Accept: "application/json" },
     });
 
@@ -40,15 +45,10 @@ export class AnalysisClient {
     params?: Record<string, string | number | boolean | undefined>
   ): Promise<T> {
     const url = this.resolvePath(path);
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.set(key, String(value));
-        }
-      });
-    }
+    this.applyParams(url, params);
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithRetry(url.toString(), {
+      service: "analysis",
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -71,15 +71,10 @@ export class AnalysisClient {
     params?: Record<string, string | number | boolean | undefined>
   ): Promise<T> {
     const url = this.resolvePath(path);
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.set(key, String(value));
-        }
-      });
-    }
+    this.applyParams(url, params);
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithRetry(url.toString(), {
+      service: "analysis",
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -98,7 +93,7 @@ export class AnalysisClient {
 
   async getBinary(path: string): Promise<Buffer> {
     const url = this.resolvePath(path);
-    const response = await fetch(url.toString());
+    const response = await fetchWithRetry(url.toString(), { service: "analysis" });
 
     if (!response.ok) {
       throw new Error(`Analysis Service error ${response.status}`);
@@ -110,7 +105,8 @@ export class AnalysisClient {
 
   async getCsv(path: string): Promise<string> {
     const url = this.resolvePath(path);
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithRetry(url.toString(), {
+      service: "analysis",
       headers: { Accept: "text/csv" },
     });
 

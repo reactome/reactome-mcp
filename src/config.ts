@@ -1,5 +1,17 @@
-export const CONTENT_SERVICE_URL = "https://reactome.org/ContentService/";
-export const ANALYSIS_SERVICE_URL = "https://reactome.org/AnalysisService/";
+const DEFAULT_BASE_URL = "https://reactome.org";
+
+function normalizeBaseUrl(url: string): string {
+  return url.endsWith("/") ? url.slice(0, -1) : url;
+}
+
+export const REACTOME_BASE_URL = normalizeBaseUrl(
+  process.env.REACTOME_BASE_URL ?? DEFAULT_BASE_URL
+);
+
+export const CONTENT_SERVICE_URL =
+  process.env.REACTOME_CONTENT_SERVICE_URL ?? `${REACTOME_BASE_URL}/ContentService/`;
+export const ANALYSIS_SERVICE_URL =
+  process.env.REACTOME_ANALYSIS_SERVICE_URL ?? `${REACTOME_BASE_URL}/AnalysisService/`;
 
 export const DEFAULT_SPECIES = "Homo sapiens";
 export const DEFAULT_PAGE_SIZE = 25;

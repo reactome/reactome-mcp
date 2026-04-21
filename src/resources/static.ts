@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { contentClient } from "../clients/content.js";
 import type { Species, Disease } from "../types/index.js";
+import { isNeo4jConfigured, fetchGraphSchema } from "../clients/neo4j.js";
 
 export function registerStaticResources(server: McpServer) {
   // All species
@@ -75,4 +76,22 @@ export function registerStaticResources(server: McpServer) {
       };
     }
   );
+
+  // Graph schema (opt-in, requires NEO4J_URI)
+  if (isNeo4jConfigured()) {
+    server.resource(
+      "reactome://graph/schema",
+      "reactome://graph/schema",
+      async () => {
+        const schema = await fetchGraphSchema();
+        return {
+          contents: [{
+            uri: "reactome://graph/schema",
+            mimeType: "application/json",
+            text: JSON.stringify(schema, null, 2),
+          }],
+        };
+      }
+    );
+  }
 }

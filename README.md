@@ -24,9 +24,23 @@ Over 40 tools and 10 resources are registered — see [Tools](#tools) and [Resou
 ```bash
 git clone https://github.com/reactome/reactome-mcp.git
 cd reactome-mcp
-npm install
-npm run build
+npm install  # runs `prepare` which builds dist/
 ```
+
+## Configuration
+
+All configuration is via environment variables — pass them in the `env` block of your MCP client config.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `REACTOME_BASE_URL` | `https://reactome.org` | Base URL for the Content + Analysis Services. Override to point at staging / a specific release host. |
+| `REACTOME_CONTENT_SERVICE_URL` | derived from `REACTOME_BASE_URL` | Fine-grained override for the Content Service only. |
+| `REACTOME_ANALYSIS_SERVICE_URL` | derived from `REACTOME_BASE_URL` | Fine-grained override for the Analysis Service only. |
+| `NEO4J_URI` | _(unset)_ | Set to enable the optional Cypher tools (see below). |
+| `NEO4J_USER` | `neo4j` | |
+| `NEO4J_PASSWORD` | `neo4j` | Works against auth-disabled local images (`reactome_neo4j_env`). Set explicitly for any remote database. |
+| `NEO4J_DATABASE` | `graph.db` | Matches the default in `reactome_neo4j_env`. |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. Logs are JSON on stderr; stdout is reserved for the MCP protocol. |
 
 ## Usage
 

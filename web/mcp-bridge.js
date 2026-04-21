@@ -17,6 +17,24 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8888;
 
+// Allow-list of CORS origins. Defaults to localhost-only. Override with
+// ALLOWED_ORIGINS="https://foo.example.com,https://bar.example.com" (comma-separated)
+// or ALLOWED_ORIGINS="*" to explicitly opt in to allowing any origin
+// (NOT recommended — any webpage can then invoke tools on the user's behalf).
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS
+  ?? `http://localhost:${PORT},http://127.0.0.1:${PORT}`)
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+const ALLOW_ALL_ORIGINS = ALLOWED_ORIGINS.includes('*');
+
+function resolveOriginHeader(req) {
+  const origin = req.headers.origin;
+  if (!origin) return null;
+  if (ALLOW_ALL_ORIGINS) return origin;
+  return ALLOWED_ORIGINS.includes(origin) ? origin : null;
+}
+
 // MIME types for static files
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -162,10 +180,19 @@ const mcpClient = new McpClient();
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // CORS — allow-list only. Same-origin requests (no Origin header) pass through.
+  const allowedOrigin = resolveOriginHeader(req);
+  if (req.headers.origin && !allowedOrigin) {
+    res.writeHead(403);
+    res.end('Origin not allowed');
+    return;
+  }
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);

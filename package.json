@@ -1,16 +1,25 @@
 {
   "name": "reactome-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for Reactome pathway database - analysis, search, and exploration tools",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "reactome-mcp": "dist/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepare": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "inspect": "npx @anthropic-ai/mcp-inspector node dist/index.js",
     "demo": "node web/mcp-bridge.js",
     "demo:simple": "node web/server.js"
@@ -31,7 +40,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.5"
   },
   "engines": {
     "node": ">=18.0.0"

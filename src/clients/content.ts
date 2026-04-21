@@ -1,4 +1,5 @@
 import { CONTENT_SERVICE_URL } from "../config.js";
+import { fetchWithRetry } from "./http.js";
 
 export class ContentClient {
   private baseUrl: string;
@@ -7,9 +8,8 @@ export class ContentClient {
     this.baseUrl = baseUrl;
   }
 
-  async get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
-    // Remove leading slash for proper URL resolution
-    const relativePath = path.startsWith('/') ? path.slice(1) : path;
+  private buildUrl(path: string, params?: Record<string, string | number | boolean | undefined>): URL {
+    const relativePath = path.startsWith("/") ? path.slice(1) : path;
     const url = new URL(relativePath, this.baseUrl);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -18,8 +18,13 @@ export class ContentClient {
         }
       });
     }
+    return url;
+  }
 
-    const response = await fetch(url.toString(), {
+  async get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+    const url = this.buildUrl(path, params);
+    const response = await fetchWithRetry(url.toString(), {
+      service: "content",
       headers: { Accept: "application/json" },
     });
 
@@ -32,17 +37,9 @@ export class ContentClient {
   }
 
   async post<T>(path: string, body: unknown, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
-    const relativePath = path.startsWith('/') ? path.slice(1) : path;
-    const url = new URL(relativePath, this.baseUrl);
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.set(key, String(value));
-        }
-      });
-    }
-
-    const response = await fetch(url.toString(), {
+    const url = this.buildUrl(path, params);
+    const response = await fetchWithRetry(url.toString(), {
+      service: "content",
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -60,9 +57,9 @@ export class ContentClient {
   }
 
   async getText(path: string): Promise<string> {
-    const relativePath = path.startsWith('/') ? path.slice(1) : path;
-    const url = new URL(relativePath, this.baseUrl);
-    const response = await fetch(url.toString(), {
+    const url = this.buildUrl(path);
+    const response = await fetchWithRetry(url.toString(), {
+      service: "content",
       headers: { Accept: "text/plain" },
     });
 
@@ -74,9 +71,8 @@ export class ContentClient {
   }
 
   async getBinary(path: string): Promise<Buffer> {
-    const relativePath = path.startsWith('/') ? path.slice(1) : path;
-    const url = new URL(relativePath, this.baseUrl);
-    const response = await fetch(url.toString());
+    const url = this.buildUrl(path);
+    const response = await fetchWithRetry(url.toString(), { service: "content" });
 
     if (!response.ok) {
       throw new Error(`Content Service error ${response.status}`);
