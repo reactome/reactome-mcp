@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] — 2026-04-21
+
+### Added
+- **MCP server `instructions`** — the server now sends orientation instructions in its `initialize` response: tool-category taxonomy, ID conventions, recommended workflow, and (if `NEO4J_URI` is set) Cypher-specific guidance including the "call schema first" rule and the APOC denylist. Clients like Claude Code read this on connection, so no external prompt engineering is needed.
+- **README: Example prompts** — a "try these" block with REST and Cypher starter prompts so curators know what to ask on day one.
+
 ## [1.3.0] — 2026-04-21
 
 ### Added

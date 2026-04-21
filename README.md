@@ -66,6 +66,29 @@ Add the server to your Claude Desktop configuration (`claude_desktop_config.json
 claude mcp add reactome node /absolute/path/to/reactome-mcp/dist/index.js
 ```
 
+Add `--env NEO4J_URI=bolt://localhost:7687` (and friends) to enable the Cypher tools. See [Configuration](#configuration) for the full list.
+
+### Example prompts
+
+Once the server is registered, try asking Claude:
+
+**Exploration (REST — works with default install):**
+
+- "What does Reactome know about the TP53 gene? Show me the top pathways it appears in."
+- "Give me the top-level pathways for *Mus musculus* and point out which are disease pathways."
+- "Summarize pathway R-HSA-109582 — include the references."
+- "I have these UniProt IDs: P04637, P53350, Q9UPN9, Q9Y243. Run a Reactome pathway enrichment and list the top 10 hits by FDR."
+- "Find pathways in the HHV8 infection area and show me the contained reactions of the best match."
+- "Export the SBGN for pathway R-HSA-1640170."
+
+**Graph queries (requires `NEO4J_URI`):**
+
+- "Show me the Reactome graph schema, then find all `Pathway` nodes that are disease pathways *and* have a human species annotation."
+- "Using the graph DB: for reaction R-HSA-199420, list every input and output entity with its display name and stable ID."
+- "Count how many `ReactionLikeEvent` nodes exist per species."
+
+Claude reads per-server instructions on connection explaining the tool categories, ID conventions, and a recommended workflow, so it can usually chain the right calls without hand-holding. If an answer looks off, ask it to "show me the tool call and its result" and correct from there.
+
 ### Standalone
 
 ```bash

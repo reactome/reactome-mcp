@@ -6,11 +6,12 @@ import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 import { logger } from "./logger.js";
 import { CONTENT_SERVICE_URL, ANALYSIS_SERVICE_URL, NEO4J_URI } from "./config.js";
+import { buildServerInstructions } from "./instructions.js";
 
-const server = new McpServer({
-  name: "reactome",
-  version: "1.3.0",
-});
+const server = new McpServer(
+  { name: "reactome", version: "1.3.1" },
+  { instructions: buildServerInstructions() }
+);
 
 registerAllTools(server);
 registerAllResources(server);
