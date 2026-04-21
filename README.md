@@ -13,7 +13,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - **Species & disease** — list available species and disease annotations
 - **ID mapping** — map external identifiers (UniProt, Ensembl, CHEBI, etc.) to Reactome pathways and reactions
 
-Over 40 tools and 10 resources are registered — see [Tools](#tools) and [Resources](#resources) below for the full list.
+Over 40 tools and 10 resources are registered — see [Tools](#tools) and [Resources](#resources) below for the full list. Curators can additionally opt in to direct **Cypher / Neo4j** access against a local Reactome graph database (see [Graph Database / Cypher](#graph-database--cypher-3-tools-opt-in)).
 
 ## Prerequisites
 
@@ -152,6 +152,37 @@ Starts a local web UI with an MCP bridge for browser-based exploration.
 | `reactome_static_interactors` | Get curated interactions from Reactome |
 | `reactome_interactor_pathways` | Find pathways where a protein's interactors appear |
 | `reactome_interactor_summary` | Summarise curated interactions for a protein |
+
+### Graph Database / Cypher (3 tools, opt-in)
+
+Only registered when `NEO4J_URI` is set. Designed for curators running the [`reactome_neo4j_env`](https://github.com/reactome/reactome_neo4j_env) Docker image locally (or pointing at a remote Reactome Neo4j). Sessions are opened in READ mode — write clauses are rejected by the server.
+
+| Tool | Description |
+|------|-------------|
+| `reactome_cypher_query` | Run a read-only Cypher query with optional parameters; row count is capped |
+| `reactome_cypher_schema` | Introspect labels, relationship types, and per-label property keys |
+| `reactome_cypher_sample` | Return a small sample of nodes for a given label |
+
+**Configuration** (add to your Claude MCP config `env` block):
+
+```json
+{
+  "mcpServers": {
+    "reactome": {
+      "command": "node",
+      "args": ["/absolute/path/to/reactome-mcp/dist/index.js"],
+      "env": {
+        "NEO4J_URI": "bolt://localhost:7687",
+        "NEO4J_USER": "neo4j",
+        "NEO4J_PASSWORD": "neo4j",
+        "NEO4J_DATABASE": "graph.db"
+      }
+    }
+  }
+}
+```
+
+`NEO4J_USER` / `NEO4J_PASSWORD` default to `neo4j` / `neo4j` (which works when the server has auth disabled, as in `reactome_neo4j_env`). `NEO4J_DATABASE` defaults to `graph.db`.
 
 ### Utilities (7 tools)
 

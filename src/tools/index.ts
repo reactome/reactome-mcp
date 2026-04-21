@@ -9,6 +9,8 @@ import { registerSearchTools } from "./search.js";
 import { registerEntityTools } from "./entity.js";
 import { registerExportTools } from "./export.js";
 import { registerInteractorTools } from "./interactors.js";
+import { registerCypherTools } from "./cypher.js";
+import { isNeo4jConfigured } from "../clients/neo4j.js";
 
 export function registerAllTools(server: McpServer) {
   // Register tools from all modules
@@ -18,6 +20,11 @@ export function registerAllTools(server: McpServer) {
   registerEntityTools(server);
   registerExportTools(server);
   registerInteractorTools(server);
+
+  // Graph database tools — only when NEO4J_URI is set
+  if (isNeo4jConfigured()) {
+    registerCypherTools(server);
+  }
 
   // Register utility tools directly here
   registerUtilityTools(server);

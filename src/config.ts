@@ -31,3 +31,8 @@ export const RESOURCE_TYPES = [
 ] as const;
 
 export const DIAGRAM_FORMATS = ["png", "jpg", "jpeg", "svg", "gif"] as const;
+
+export const NEO4J_URI = process.env.NEO4J_URI;
+export const NEO4J_USER = process.env.NEO4J_USER ?? "neo4j";
+export const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD ?? "neo4j";
+export const NEO4J_DATABASE = process.env.NEO4J_DATABASE ?? "graph.db";
