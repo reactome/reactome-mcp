@@ -37,6 +37,23 @@ export function getDriver(): Driver {
   return driverInstance;
 }
 
+// JS `number` always serializes to Float64 over Bolt. Cypher features like
+// LIMIT / SKIP require an Integer type on the server side, so coerce any
+// safe-integer number (and bigint) params into the driver's Integer wrapper.
+function coerceIntParams(params: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (typeof v === "number" && Number.isInteger(v) && Number.isSafeInteger(v)) {
+      out[k] = neo4j.int(v);
+    } else if (typeof v === "bigint") {
+      out[k] = neo4j.int(v.toString());
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 export async function runRead<T = Record<string, unknown>>(
   cypher: string,
   params: Record<string, unknown> = {}
@@ -46,7 +63,7 @@ export async function runRead<T = Record<string, unknown>>(
     defaultAccessMode: neo4j.session.READ,
   });
   try {
-    const result = await session.run(cypher, params);
+    const result = await session.run(cypher, coerceIntParams(params));
     return result.records.map((r) => r.toObject() as T);
   } finally {
     await session.close();
