@@ -69,7 +69,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_get_pathway",
     "Get detailed information about a specific pathway or reaction by its Reactome ID.",
     {
-      id: z.string().describe("Reactome stable ID (e.g., R-HSA-109582) or database ID"),
+      id: z.string().max(2048).describe("Reactome stable ID (e.g., R-HSA-109582) or database ID"),
     },
     async ({ id }) => {
       const pathway = await contentClient.get<Event>(`/data/query/enhanced/${encodeURIComponent(id)}`);
@@ -84,7 +84,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_top_pathways",
     "Get all top-level (root) pathways for a species. These are the main pathway categories like 'Immune System', 'Metabolism', etc.",
     {
-      species: z.string().optional().default("Homo sapiens").describe("Species name or taxonomy ID"),
+      species: z.string().max(2048).optional().default("Homo sapiens").describe("Species name or taxonomy ID"),
     },
     async ({ species }) => {
       const pathways = await contentClient.get<Pathway[]>(`/data/pathways/top/${encodeURIComponent(species)}`);
@@ -107,7 +107,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_pathway_ancestors",
     "Get the ancestor pathway hierarchy for an event (pathway or reaction). Shows how a pathway fits into the broader Reactome structure.",
     {
-      id: z.string().describe("Reactome stable ID or database ID"),
+      id: z.string().max(2048).describe("Reactome stable ID or database ID"),
     },
     async ({ id }) => {
       const ancestors = await contentClient.get<Event[][]>(`/data/event/${encodeURIComponent(id)}/ancestors`);
@@ -139,7 +139,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_pathway_contained_events",
     "Get all events (sub-pathways and reactions) contained within a pathway.",
     {
-      id: z.string().describe("Pathway stable ID or database ID"),
+      id: z.string().max(2048).describe("Pathway stable ID or database ID"),
     },
     async ({ id }) => {
       const events = await contentClient.get<Event[]>(`/data/pathway/${encodeURIComponent(id)}/containedEvents`);
@@ -184,7 +184,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_pathways_for_entity",
     "Find lower-level pathways that contain a specific entity (protein, gene, compound, etc.).",
     {
-      id: z.string().describe("Entity stable ID or database ID"),
+      id: z.string().max(2048).describe("Entity stable ID or database ID"),
       all_forms: z.boolean().optional().default(false).describe("Include all forms of the entity (modified, in complexes, etc.)"),
     },
     async ({ id, all_forms }) => {
@@ -217,7 +217,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_diagram_pathways_for_entity",
     "Find pathways with diagrams that contain a specific entity. Useful for visualization.",
     {
-      id: z.string().describe("Entity stable ID or database ID"),
+      id: z.string().max(2048).describe("Entity stable ID or database ID"),
       all_forms: z.boolean().optional().default(false).describe("Include all forms of the entity"),
     },
     async ({ id, all_forms }) => {
@@ -249,7 +249,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_events_hierarchy",
     "Get the complete event hierarchy (pathways and reactions tree) for a species. Warning: This returns a large data structure.",
     {
-      species: z.string().optional().default("Homo sapiens").describe("Species name or taxonomy ID"),
+      species: z.string().max(2048).optional().default("Homo sapiens").describe("Species name or taxonomy ID"),
     },
     async ({ species }) => {
       const hierarchy = await contentClient.get<EventHierarchy[]>(`/data/eventsHierarchy/${encodeURIComponent(species)}`);

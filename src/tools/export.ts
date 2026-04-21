@@ -10,11 +10,11 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_diagram",
     "Export a pathway diagram as an image. Returns the URL to download the diagram.",
     {
-      id: z.string().describe("Pathway stable ID (e.g., R-HSA-109582)"),
+      id: z.string().max(2048).describe("Pathway stable ID (e.g., R-HSA-109582)"),
       format: z.enum(["png", "jpg", "svg", "gif"]).optional().default("svg").describe("Image format"),
       quality: z.number().optional().default(5).describe("Quality/scale factor (1-10, higher = larger image)"),
-      flag: z.string().optional().describe("Identifier to highlight/flag in the diagram"),
-      sel: z.array(z.string()).optional().describe("IDs to select/highlight"),
+      flag: z.string().max(2048).optional().describe("Identifier to highlight/flag in the diagram"),
+      sel: z.array(z.string().max(2048)).optional().describe("IDs to select/highlight"),
     },
     async ({ id, format, quality, flag, sel }) => {
       const params = new URLSearchParams();
@@ -50,7 +50,7 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_reaction",
     "Export a reaction diagram as an image.",
     {
-      id: z.string().describe("Reaction stable ID"),
+      id: z.string().max(2048).describe("Reaction stable ID"),
       format: z.enum(["png", "jpg", "svg", "gif"]).optional().default("svg").describe("Image format"),
       quality: z.number().optional().default(5).describe("Quality/scale factor"),
     },
@@ -77,7 +77,7 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_fireworks",
     "Export the pathway overview (fireworks) diagram for a species.",
     {
-      species: z.string().optional().default("Homo sapiens").describe("Species name"),
+      species: z.string().max(2048).optional().default("Homo sapiens").describe("Species name"),
       format: z.enum(["png", "jpg", "svg", "gif"]).optional().default("svg").describe("Image format"),
     },
     async ({ species, format }) => {
@@ -105,7 +105,7 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_sbgn",
     "Export a pathway or reaction to SBGN (Systems Biology Graphical Notation) XML format.",
     {
-      id: z.string().describe("Pathway or reaction stable ID"),
+      id: z.string().max(2048).describe("Pathway or reaction stable ID"),
     },
     async ({ id }) => {
       try {
@@ -149,7 +149,7 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_sbml",
     "Export a pathway or reaction to SBML (Systems Biology Markup Language) format.",
     {
-      id: z.string().describe("Pathway or reaction stable ID"),
+      id: z.string().max(2048).describe("Pathway or reaction stable ID"),
     },
     async ({ id }) => {
       const url = `${CONTENT_SERVICE_URL}/exporter/event/${encodeURIComponent(id)}.sbml`;
@@ -174,7 +174,7 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_pdf",
     "Export pathway or reaction documentation to PDF format.",
     {
-      id: z.string().describe("Pathway or reaction stable ID"),
+      id: z.string().max(2048).describe("Pathway or reaction stable ID"),
     },
     async ({ id }) => {
       const url = `${CONTENT_SERVICE_URL}/exporter/document/event/${encodeURIComponent(id)}.pdf`;
@@ -199,10 +199,10 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_analysis_report",
     "Generate a PDF report for an analysis result.",
     {
-      token: z.string().describe("Analysis token"),
-      species: z.string().optional().default("Homo sapiens").describe("Species for the report"),
+      token: z.string().max(2048).describe("Analysis token"),
+      species: z.string().max(2048).optional().default("Homo sapiens").describe("Species for the report"),
       num_pathways: z.number().optional().default(25).describe("Number of top pathways to include"),
-      resource: z.string().optional().default("TOTAL").describe("Resource filter"),
+      resource: z.string().max(2048).optional().default("TOTAL").describe("Resource filter"),
     },
     async ({ token, species, num_pathways, resource }) => {
       const speciesParam = species.replace(/\s+/g, "_");
@@ -229,9 +229,9 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_analysis_csv",
     "Export analysis results as CSV files.",
     {
-      token: z.string().describe("Analysis token"),
+      token: z.string().max(2048).describe("Analysis token"),
       type: z.enum(["pathways", "found_entities", "not_found"]).describe("Type of data to export"),
-      resource: z.string().optional().default("TOTAL").describe("Resource filter (for pathways and found_entities)"),
+      resource: z.string().max(2048).optional().default("TOTAL").describe("Resource filter (for pathways and found_entities)"),
     },
     async ({ token, type, resource }) => {
       let url: string;
@@ -273,7 +273,7 @@ export function registerExportTools(server: McpServer) {
     "reactome_export_analysis_json",
     "Export complete analysis result as JSON.",
     {
-      token: z.string().describe("Analysis token"),
+      token: z.string().max(2048).describe("Analysis token"),
       compressed: z.boolean().optional().default(false).describe("Return gzipped JSON"),
     },
     async ({ token, compressed }) => {

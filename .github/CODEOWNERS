@@ -1,0 +1,13 @@
+# Default code owners for this repository.
+#
+# Reviewers listed here will be requested automatically on every PR touching
+# the matching path. Replace the placeholder with real GitHub handles of the
+# Reactome MCP maintainers before enforcing via branch protection.
+
+* @reactome/mcp-maintainers
+
+# More granular ownership examples (uncomment and edit as needed):
+# /src/clients/neo4j.ts       @reactome/db-team
+# /src/tools/cypher.ts        @reactome/db-team
+# /.github/workflows/         @reactome/mcp-maintainers
+# /CHANGELOG.md               @reactome/mcp-maintainers

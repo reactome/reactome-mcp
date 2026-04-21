@@ -1,3 +1,5 @@
+import { currentReqId } from "./context.js";
+
 type Level = "debug" | "info" | "warn" | "error";
 
 const LEVEL_ORDER: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -12,9 +14,11 @@ const MIN_LEVEL = resolveMinLevel();
 
 function emit(level: Level, msg: string, fields?: Record<string, unknown>) {
   if (LEVEL_ORDER[level] < LEVEL_ORDER[MIN_LEVEL]) return;
+  const reqId = currentReqId();
   const payload = {
     t: new Date().toISOString(),
     lvl: level,
+    ...(reqId ? { reqId } : {}),
     msg,
     ...(fields ?? {}),
   };

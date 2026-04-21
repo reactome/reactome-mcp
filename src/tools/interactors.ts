@@ -73,8 +73,8 @@ export function registerInteractorTools(server: McpServer) {
     "reactome_psicquic_summary",
     "Get a summary of protein-protein interactions from a PSICQUIC resource.",
     {
-      resource: z.string().describe("PSICQUIC resource name (e.g., 'IntAct', 'MINT', 'BioGRID')"),
-      accession: z.string().describe("Protein accession (e.g., UniProt ID)"),
+      resource: z.string().max(2048).describe("PSICQUIC resource name (e.g., 'IntAct', 'MINT', 'BioGRID')"),
+      accession: z.string().max(2048).describe("Protein accession (e.g., UniProt ID)"),
     },
     async ({ resource, accession }) => {
       const result = await contentClient.get<InteractorSummary>(
@@ -99,8 +99,8 @@ export function registerInteractorTools(server: McpServer) {
     "reactome_psicquic_details",
     "Get detailed protein-protein interactions from a PSICQUIC resource.",
     {
-      resource: z.string().describe("PSICQUIC resource name"),
-      accession: z.string().describe("Protein accession"),
+      resource: z.string().max(2048).describe("PSICQUIC resource name"),
+      accession: z.string().max(2048).describe("Protein accession"),
     },
     async ({ resource, accession }) => {
       const result = await contentClient.get<InteractionDetails>(
@@ -134,7 +134,7 @@ export function registerInteractorTools(server: McpServer) {
     "reactome_static_interactors",
     "Get curated protein-protein interactions from Reactome's static interactor database.",
     {
-      accession: z.string().describe("Protein accession (e.g., UniProt ID)"),
+      accession: z.string().max(2048).describe("Protein accession (e.g., UniProt ID)"),
     },
     async ({ accession }) => {
       interface StaticDetailsResult {
@@ -182,7 +182,7 @@ export function registerInteractorTools(server: McpServer) {
     "reactome_interactor_pathways",
     "Find Reactome pathways where the interactors of a protein are found.",
     {
-      accession: z.string().describe("Protein accession"),
+      accession: z.string().max(2048).describe("Protein accession"),
     },
     async ({ accession }) => {
       const pathways = await contentClient.get<Pathway[]>(
@@ -211,7 +211,7 @@ export function registerInteractorTools(server: McpServer) {
     "reactome_interactor_summary",
     "Get a summary of curated interactions for a protein.",
     {
-      accession: z.string().describe("Protein accession"),
+      accession: z.string().max(2048).describe("Protein accession"),
     },
     async ({ accession }) => {
       interface SummaryResult {

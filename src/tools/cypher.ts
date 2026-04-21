@@ -172,7 +172,7 @@ export function registerCypherTools(server: McpServer) {
     "reactome_cypher_sample",
     "Return a small sample of nodes for a given label, to inspect shape and typical property values.",
     {
-      label: z.string().describe("Node label to sample (e.g. 'Pathway', 'ReactionLikeEvent', 'PhysicalEntity')"),
+      label: z.string().min(1).max(200).describe("Node label to sample (e.g. 'Pathway', 'ReactionLikeEvent', 'PhysicalEntity')"),
       limit: z.number().int().positive().max(50).optional().default(5).describe("Number of nodes to return (default 5, max 50)"),
     },
     async ({ label, limit }) => {

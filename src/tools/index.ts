@@ -11,9 +11,35 @@ import { registerExportTools } from "./export.js";
 import { registerInteractorTools } from "./interactors.js";
 import { registerCypherTools } from "./cypher.js";
 import { isNeo4jConfigured } from "../clients/neo4j.js";
+import { withNewRequestContext } from "../context.js";
+
+/**
+ * Wrap `server.tool` so every handler runs inside a fresh request context.
+ * The context carries a short reqId that the logger auto-includes in every
+ * log line emitted during that invocation — giving one correlation handle
+ * across tool → client → retry → error log.
+ */
+function installRequestContextWrapper(server: McpServer) {
+  const original = server.tool.bind(server);
+  // The SDK's tool() is an overloaded method; we only ever call the 4-arg
+  // form (name, description, schema, handler). Keep the wrapper permissive.
+  (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (
+    ...args: unknown[]
+  ) => {
+    const handler = args[args.length - 1];
+    if (typeof handler !== "function") {
+      return (original as (...a: unknown[]) => unknown)(...args);
+    }
+    const wrapped = (params: unknown) =>
+      withNewRequestContext(() => (handler as (p: unknown) => unknown)(params));
+    const nextArgs = [...args.slice(0, -1), wrapped];
+    return (original as (...a: unknown[]) => unknown)(...nextArgs);
+  };
+}
 
 export function registerAllTools(server: McpServer) {
-  // Register tools from all modules
+  installRequestContextWrapper(server);
+
   registerAnalysisTools(server);
   registerPathwayTools(server);
   registerSearchTools(server);
@@ -115,8 +141,8 @@ function registerUtilityTools(server: McpServer) {
     "reactome_mapping_pathways",
     "Map an external identifier to Reactome pathways.",
     {
-      resource: z.string().describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
-      identifier: z.string().describe("External identifier"),
+      resource: z.string().max(2048).describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
+      identifier: z.string().max(2048).describe("External identifier"),
     },
     async ({ resource, identifier }) => {
       const pathways = await contentClient.get<Pathway[]>(
@@ -145,8 +171,8 @@ function registerUtilityTools(server: McpServer) {
     "reactome_mapping_reactions",
     "Map an external identifier to Reactome reactions.",
     {
-      resource: z.string().describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
-      identifier: z.string().describe("External identifier"),
+      resource: z.string().max(2048).describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
+      identifier: z.string().max(2048).describe("External identifier"),
     },
     async ({ resource, identifier }) => {
       interface Reaction {
@@ -182,8 +208,8 @@ function registerUtilityTools(server: McpServer) {
     "reactome_orthology",
     "Get orthologous events or entities in a different species.",
     {
-      id: z.string().describe("Reactome stable ID of an event or entity"),
-      species: z.string().describe("Target species (taxonomy ID or name)"),
+      id: z.string().max(2048).describe("Reactome stable ID of an event or entity"),
+      species: z.string().max(2048).describe("Target species (taxonomy ID or name)"),
     },
     async ({ id, species }) => {
       interface OrthologyResult {
@@ -215,8 +241,8 @@ function registerUtilityTools(server: McpServer) {
     "reactome_query",
     "Query any Reactome database object by its identifier. Returns detailed information about the object.",
     {
-      id: z.string().describe("Reactome stable ID or database ID"),
-      attribute: z.string().optional().describe("Specific attribute to retrieve (optional)"),
+      id: z.string().max(2048).describe("Reactome stable ID or database ID"),
+      attribute: z.string().max(2048).optional().describe("Specific attribute to retrieve (optional)"),
     },
     async ({ id, attribute }) => {
       const endpoint = attribute

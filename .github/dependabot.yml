@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      # Batch dev-dependency bumps (vitest, typescript, @types/*) into a
+      # single PR — they churn often and aren't worth separate reviews.
+      dev-dependencies:
+        dependency-type: development
+      # Same for patch/minor runtime bumps.
+      runtime-patch-minor:
+        dependency-type: production
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - ci

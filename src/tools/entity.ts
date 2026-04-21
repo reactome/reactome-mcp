@@ -76,7 +76,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_get_entity",
     "Get detailed information about a physical entity (protein, complex, compound, etc.) by its Reactome ID.",
     {
-      id: z.string().describe("Reactome stable ID (e.g., R-HSA-123456) or database ID"),
+      id: z.string().max(2048).describe("Reactome stable ID (e.g., R-HSA-123456) or database ID"),
     },
     async ({ id }) => {
       const entity = await contentClient.get<EnhancedEntity>(`/data/query/enhanced/${encodeURIComponent(id)}`);
@@ -91,7 +91,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_complex_subunits",
     "Get all subunits (components) of a complex. Recursively retrieves components of nested complexes.",
     {
-      id: z.string().describe("Complex stable ID or database ID"),
+      id: z.string().max(2048).describe("Complex stable ID or database ID"),
     },
     async ({ id }) => {
       const subunits = await contentClient.get<PhysicalEntity[]>(`/data/complex/${encodeURIComponent(id)}/subunits`);
@@ -129,7 +129,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_entity_other_forms",
     "Get all other forms of a physical entity (modified forms, in different compartments, in complexes, etc.).",
     {
-      id: z.string().describe("Entity stable ID or database ID"),
+      id: z.string().max(2048).describe("Entity stable ID or database ID"),
     },
     async ({ id }) => {
       const otherForms = await contentClient.get<PhysicalEntity[]>(`/data/entity/${encodeURIComponent(id)}/otherForms`);
@@ -156,7 +156,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_entity_component_of",
     "Find larger structures (complexes, sets) that contain this entity as a component.",
     {
-      id: z.string().describe("Entity stable ID or database ID"),
+      id: z.string().max(2048).describe("Entity stable ID or database ID"),
     },
     async ({ id }) => {
       const containers = await contentClient.get<Complex[]>(`/data/entity/${encodeURIComponent(id)}/componentOf`);
@@ -183,7 +183,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_participants",
     "Get all molecular participants (inputs, outputs, catalysts, regulators) in a reaction or pathway.",
     {
-      id: z.string().describe("Event (pathway or reaction) stable ID or database ID"),
+      id: z.string().max(2048).describe("Event (pathway or reaction) stable ID or database ID"),
     },
     async ({ id }) => {
       const participants = await contentClient.get<Participant[]>(`/data/participants/${encodeURIComponent(id)}`);
@@ -225,7 +225,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_participating_physical_entities",
     "Get all physical entities participating in an event (molecules directly involved in reactions).",
     {
-      id: z.string().describe("Event stable ID or database ID"),
+      id: z.string().max(2048).describe("Event stable ID or database ID"),
     },
     async ({ id }) => {
       const entities = await contentClient.get<PhysicalEntity[]>(`/data/participants/${encodeURIComponent(id)}/participatingPhysicalEntities`);
@@ -252,7 +252,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_reference_entities",
     "Get all reference entities (external database references) for participants in an event.",
     {
-      id: z.string().describe("Event stable ID or database ID"),
+      id: z.string().max(2048).describe("Event stable ID or database ID"),
     },
     async ({ id }) => {
       const refs = await contentClient.get<ReferenceEntity[]>(`/data/participants/${encodeURIComponent(id)}/referenceEntities`);
@@ -293,8 +293,8 @@ export function registerEntityTools(server: McpServer) {
     "reactome_complexes_containing",
     "Find all Reactome complexes that contain a specific external identifier (e.g., UniProt ID).",
     {
-      resource: z.string().describe("Database name (e.g., 'UniProt', 'ChEBI', 'Ensembl')"),
-      identifier: z.string().describe("External identifier (e.g., 'P04637' for UniProt)"),
+      resource: z.string().max(2048).describe("Database name (e.g., 'UniProt', 'ChEBI', 'Ensembl')"),
+      identifier: z.string().max(2048).describe("External identifier (e.g., 'P04637' for UniProt)"),
     },
     async ({ resource, identifier }) => {
       const complexes = await contentClient.get<Complex[]>(`/data/complexes/${encodeURIComponent(resource)}/${encodeURIComponent(identifier)}`);

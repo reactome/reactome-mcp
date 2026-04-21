@@ -46,10 +46,10 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analyze_identifier",
     "Analyze a single gene/protein identifier for pathway enrichment. Returns pathways containing this identifier.",
     {
-      id: z.string().describe("Gene symbol, UniProt ID, Ensembl ID, or other identifier"),
+      id: z.string().max(2048).describe("Gene symbol, UniProt ID, Ensembl ID, or other identifier"),
       projection: z.boolean().optional().default(true).describe("Project results to Homo sapiens"),
       interactors: z.boolean().optional().default(false).describe("Include interactor data"),
-      species: z.string().optional().describe("Filter by species (taxonomy ID or name)"),
+      species: z.string().max(2048).optional().describe("Filter by species (taxonomy ID or name)"),
     },
     async ({ id, projection, interactors, species }) => {
       const endpoint = projection ? `/identifier/${encodeURIComponent(id)}/projection` : `/identifier/${encodeURIComponent(id)}`;
@@ -72,7 +72,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analyze_identifiers",
     "Perform pathway enrichment analysis on a list of gene/protein identifiers. Returns over-represented pathways sorted by p-value.",
     {
-      identifiers: z.array(z.string()).describe("List of gene symbols, UniProt IDs, or other identifiers"),
+      identifiers: z.array(z.string().max(2048)).describe("List of gene symbols, UniProt IDs, or other identifiers"),
       projection: z.boolean().optional().default(true).describe("Project results to Homo sapiens"),
       interactors: z.boolean().optional().default(false).describe("Include interactor data in analysis"),
       include_disease: z.boolean().optional().default(true).describe("Include disease pathways"),
@@ -104,8 +104,8 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_get_analysis_result",
     "Retrieve a previously computed analysis result using its token. Allows filtering and pagination.",
     {
-      token: z.string().describe("Analysis token from a previous analysis"),
-      species: z.string().optional().describe("Filter by species"),
+      token: z.string().max(2048).describe("Analysis token from a previous analysis"),
+      species: z.string().max(2048).optional().describe("Filter by species"),
       sort_by: z.enum(["NAME", "TOTAL_ENTITIES", "FOUND_ENTITIES", "ENTITIES_PVALUE", "ENTITIES_FDR", "ENTITIES_RATIO"]).optional().default("ENTITIES_PVALUE").describe("Sort field"),
       order: z.enum(["ASC", "DESC"]).optional().default("ASC").describe("Sort order"),
       page: z.number().optional().default(1).describe("Page number"),
@@ -133,9 +133,9 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analysis_found_entities",
     "Get the identifiers that were found in a specific pathway from an analysis result.",
     {
-      token: z.string().describe("Analysis token"),
-      pathway: z.string().describe("Pathway stable ID (e.g., R-HSA-109582)"),
-      resource: z.string().optional().default("TOTAL").describe("Resource filter (TOTAL, UNIPROT, ENSEMBL, etc.)"),
+      token: z.string().max(2048).describe("Analysis token"),
+      pathway: z.string().max(2048).describe("Pathway stable ID (e.g., R-HSA-109582)"),
+      resource: z.string().max(2048).optional().default("TOTAL").describe("Resource filter (TOTAL, UNIPROT, ENSEMBL, etc.)"),
     },
     async ({ token, pathway, resource }) => {
       const result = await analysisClient.get<FoundElements>(`/token/${token}/found/all/${pathway}`, {
@@ -169,7 +169,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analysis_not_found",
     "Get the list of identifiers that could not be mapped in an analysis.",
     {
-      token: z.string().describe("Analysis token"),
+      token: z.string().max(2048).describe("Analysis token"),
       page: z.number().optional().default(1).describe("Page number"),
       page_size: z.number().optional().default(100).describe("Results per page"),
     },
@@ -197,7 +197,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analysis_resources",
     "Get a summary of the molecule types (resources) found in an analysis.",
     {
-      token: z.string().describe("Analysis token"),
+      token: z.string().max(2048).describe("Analysis token"),
     },
     async ({ token }) => {
       const result = await analysisClient.get<ResourceSummary[]>(`/token/${token}/resources`);
@@ -221,7 +221,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_compare_species",
     "Compare Homo sapiens pathways to another species to identify orthologous pathways.",
     {
-      species: z.string().describe("Species to compare (taxonomy ID or name, e.g., 'Mus musculus' or '10090')"),
+      species: z.string().max(2048).describe("Species to compare (taxonomy ID or name, e.g., 'Mus musculus' or '10090')"),
       page: z.number().optional().default(1).describe("Page number"),
       page_size: z.number().optional().default(25).describe("Results per page"),
     },
@@ -244,10 +244,10 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analysis_pathway_sizes",
     "Get the distribution of pathway sizes (binned) from an analysis result.",
     {
-      token: z.string().describe("Analysis token"),
+      token: z.string().max(2048).describe("Analysis token"),
       bin_size: z.number().optional().default(100).describe("Bin size for grouping pathway sizes"),
-      species: z.string().optional().describe("Filter by species"),
-      resource: z.string().optional().default("TOTAL").describe("Resource filter"),
+      species: z.string().max(2048).optional().describe("Filter by species"),
+      resource: z.string().max(2048).optional().default("TOTAL").describe("Resource filter"),
     },
     async ({ token, bin_size, species, resource }) => {
       const result = await analysisClient.get<Bin[]>(`/token/${token}/pathways/binned`, {
@@ -275,9 +275,9 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_filter_analysis_pathways",
     "Filter an analysis result to only include specific pathways.",
     {
-      token: z.string().describe("Analysis token"),
-      pathways: z.array(z.string()).describe("List of pathway stable IDs to include"),
-      resource: z.string().optional().default("TOTAL").describe("Resource filter"),
+      token: z.string().max(2048).describe("Analysis token"),
+      pathways: z.array(z.string().max(2048)).describe("List of pathway stable IDs to include"),
+      resource: z.string().max(2048).optional().default("TOTAL").describe("Resource filter"),
       p_value: z.number().optional().describe("p-value threshold"),
     },
     async ({ token, pathways, resource, p_value }) => {

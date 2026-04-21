@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-04-21
+
+### Added
+- **Request correlation IDs.** Every tool invocation now runs inside a fresh `AsyncLocalStorage` context with a short `reqId`; the logger auto-injects it into every log line emitted during that invocation, so retries, errors, and Neo4j calls for one request can all be grepped together. 4 new tests.
+- **`.max(2048)` on every REST-tool string input.** Swept all of `src/tools/*.ts` and `src/tools/index.ts`. Defence-in-depth against oversized payloads on the REST side; the Cypher query already had a 50k cap.
+- **Handler-level tests.** New `tests/tools.test.ts` + `tests/helpers/fake-server.ts` harness that captures `server.tool` registrations; representative happy-path tests for pathway, search, entity, and interactor tools (6 new tests). Not exhaustive — covers the pattern for future additions.
+- **Governance files**: `.github/CODEOWNERS` (placeholder team handle), `SECURITY.md` with reporting flow + scope + threat-model notes, `.github/dependabot.yml` for weekly npm + monthly actions updates.
+
 ## [1.2.0] — 2026-04-21
 
 ### Added
