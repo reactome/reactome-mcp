@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-04-21
+
+### Added
+- **Cypher query timeout.** `runRead` now passes a server-side transaction timeout so runaway queries are terminated rather than hanging the MCP server. Defaults to 30s, override via `CYPHER_QUERY_TIMEOUT_MS` env.
+- **APOC write-through guard.** `reactome_cypher_query` rejects queries calling APOC procedures that bypass READ-mode sessions (`apoc.cypher.runWrite` / `apoc.cypher.doIt`, `apoc.periodic.*`, `apoc.create/merge/refactor.*`, `apoc.load/import/export.*`, `apoc.trigger.*`, `apoc.nodes.delete`). 13 new tests cover the guard.
+- **Query length cap.** `reactome_cypher_query` rejects queries over 50,000 characters at the zod-validation layer.
+
+### Changed
+- README and tool description now describe READ mode as a guardrail against accidental mutation rather than a security boundary, explicitly noting that the real trust boundary lives at the Neo4j RBAC / plugin layer.
+
 ## [1.1.0] — 2026-04-21
 
 ### Added

@@ -48,3 +48,15 @@ export const NEO4J_URI = process.env.NEO4J_URI;
 export const NEO4J_USER = process.env.NEO4J_USER ?? "neo4j";
 export const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD ?? "neo4j";
 export const NEO4J_DATABASE = process.env.NEO4J_DATABASE ?? "graph.db";
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(n)) return fallback;
+  return n;
+}
+
+export const CYPHER_QUERY_TIMEOUT_MS = parsePositiveInt(
+  process.env.CYPHER_QUERY_TIMEOUT_MS,
+  30_000
+);

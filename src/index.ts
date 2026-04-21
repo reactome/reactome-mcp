@@ -9,7 +9,7 @@ import { CONTENT_SERVICE_URL, ANALYSIS_SERVICE_URL, NEO4J_URI } from "./config.j
 
 const server = new McpServer({
   name: "reactome",
-  version: "1.1.0",
+  version: "1.2.0",
 });
 
 registerAllTools(server);

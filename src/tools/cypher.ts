@@ -2,7 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { runRead, fetchGraphSchema } from "../clients/neo4j.js";
 import { logger } from "../logger.js";
+import { rejectWriteThroughCalls } from "./cypher-guard.js";
 
+const MAX_QUERY_CHARS = 50_000;
 const MAX_ROWS_DEFAULT = 100;
 const MAX_ROWS_CAP = 1000;
 const MAX_ROW_CHARS_DEFAULT = 2000;
@@ -68,9 +70,13 @@ export function capCypherRows(
 export function registerCypherTools(server: McpServer) {
   server.tool(
     "reactome_cypher_query",
-    "Run a read-only Cypher query against the local Reactome Neo4j graph database. The session is opened in READ mode — write clauses (CREATE/MERGE/DELETE/SET) will be rejected by the server. Row count, per-row size, and total response size are all capped; use LIMIT and project specific fields in your query for large results.",
+    "Run a Cypher query against the local Reactome Neo4j graph database. The session runs in READ mode, which rejects native write clauses (CREATE/MERGE/DELETE/SET/REMOVE). APOC procedures that can write through that guardrail (apoc.cypher.runWrite, apoc.periodic.*, apoc.create/merge/refactor.*, apoc.load/import/export.*, apoc.trigger.*, apoc.nodes.delete) are rejected before execution. Row count, per-row size, and total response size are capped; a query timeout terminates runaway queries. Use LIMIT and project specific fields in your query for large results.",
     {
-      query: z.string().describe("Cypher query to execute (read-only)"),
+      query: z
+        .string()
+        .min(1)
+        .max(MAX_QUERY_CHARS)
+        .describe(`Cypher query to execute (read-only; max ${MAX_QUERY_CHARS} chars)`),
       params: z
         .record(z.unknown())
         .optional()
@@ -101,6 +107,7 @@ export function registerCypherTools(server: McpServer) {
         .describe(`Maximum total JSON chars across all rows before truncation (default ${MAX_TOTAL_CHARS_DEFAULT}, cap ${MAX_TOTAL_CHARS_CAP})`),
     },
     async ({ query, params, max_rows, max_row_chars, max_total_chars }) => {
+      rejectWriteThroughCalls(query);
       logger.info("cypher_query", { chars: query.length, max_rows });
       const rows = await runRead<Record<string, unknown>>(query, params ?? {});
       const { output, stats } = capCypherRows(rows, max_rows, max_row_chars, max_total_chars);

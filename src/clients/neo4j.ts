@@ -4,6 +4,7 @@ import {
   NEO4J_USER,
   NEO4J_PASSWORD,
   NEO4J_DATABASE,
+  CYPHER_QUERY_TIMEOUT_MS,
 } from "../config.js";
 import { logger } from "../logger.js";
 
@@ -81,16 +82,25 @@ function coerceIntParams(params: Record<string, unknown>): Record<string, unknow
   return out;
 }
 
+export interface RunReadOptions {
+  timeoutMs?: number;
+}
+
 export async function runRead<T = Record<string, unknown>>(
   cypher: string,
-  params: Record<string, unknown> = {}
+  params: Record<string, unknown> = {},
+  options: RunReadOptions = {}
 ): Promise<T[]> {
   const session = getDriver().session({
     database: NEO4J_DATABASE,
     defaultAccessMode: neo4j.session.READ,
   });
+  const timeout = options.timeoutMs ?? CYPHER_QUERY_TIMEOUT_MS;
   try {
-    const result = await session.run(cypher, coerceIntParams(params));
+    // TransactionConfig.timeout is enforced server-side: the transaction
+    // is terminated if it runs longer than this. Guards against runaway
+    // queries on a large graph.
+    const result = await session.run(cypher, coerceIntParams(params), { timeout });
     return result.records.map((r) => r.toObject() as T);
   } finally {
     await session.close();

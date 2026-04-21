@@ -40,6 +40,7 @@ All configuration is via environment variables — pass them in the `env` block 
 | `NEO4J_USER` | `neo4j` | |
 | `NEO4J_PASSWORD` | `neo4j` | Works against auth-disabled local images (`reactome_neo4j_env`). Set explicitly for any remote database. |
 | `NEO4J_DATABASE` | `graph.db` | Matches the default in `reactome_neo4j_env`. |
+| `CYPHER_QUERY_TIMEOUT_MS` | `30000` | Server-side transaction timeout (ms) for `reactome_cypher_*` tools. Runaway queries are terminated after this. |
 | `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. Logs are JSON on stderr; stdout is reserved for the MCP protocol. |
 
 ## Usage
@@ -169,13 +170,15 @@ Starts a local web UI with an MCP bridge for browser-based exploration.
 
 ### Graph Database / Cypher (3 tools, opt-in)
 
-Only registered when `NEO4J_URI` is set. Designed for curators running the [`reactome_neo4j_env`](https://github.com/reactome/reactome_neo4j_env) Docker image locally (or pointing at a remote Reactome Neo4j). Sessions are opened in READ mode — write clauses are rejected by the server.
+Only registered when `NEO4J_URI` is set. Designed for curators running the [`reactome_neo4j_env`](https://github.com/reactome/reactome_neo4j_env) Docker image locally (or pointing at a remote Reactome Neo4j).
 
 | Tool | Description |
 |------|-------------|
-| `reactome_cypher_query` | Run a read-only Cypher query with optional parameters; row count is capped |
+| `reactome_cypher_query` | Run a Cypher query with optional parameters; row count, per-row size, and total response size are all capped; a server-side timeout terminates runaway queries |
 | `reactome_cypher_schema` | Introspect labels, relationship types, and per-label property keys |
 | `reactome_cypher_sample` | Return a small sample of nodes for a given label |
+
+**Read-only posture — what it is and isn't.** Sessions run in Neo4j READ mode, which rejects native write clauses (`CREATE`, `MERGE`, `DELETE`, `SET`, `REMOVE`). On top of that, `reactome_cypher_query` rejects APOC procedures that can write or reach outside the graph through back-channels (`apoc.cypher.runWrite` / `apoc.cypher.doIt`, `apoc.periodic.*`, `apoc.create/merge/refactor.*`, `apoc.load/import/export.*`, `apoc.trigger.*`, `apoc.nodes.delete`). Treat this as a guardrail against accidental mutation, not a security boundary — a real trust boundary should live at the Neo4j RBAC / plugin configuration layer, or by pointing at a read-only replica.
 
 **Configuration** (add to your Claude MCP config `env` block):
 
@@ -189,14 +192,15 @@ Only registered when `NEO4J_URI` is set. Designed for curators running the [`rea
         "NEO4J_URI": "bolt://localhost:7687",
         "NEO4J_USER": "neo4j",
         "NEO4J_PASSWORD": "neo4j",
-        "NEO4J_DATABASE": "graph.db"
+        "NEO4J_DATABASE": "graph.db",
+        "CYPHER_QUERY_TIMEOUT_MS": "30000"
       }
     }
   }
 }
 ```
 
-`NEO4J_USER` / `NEO4J_PASSWORD` default to `neo4j` / `neo4j` (which works when the server has auth disabled, as in `reactome_neo4j_env`). `NEO4J_DATABASE` defaults to `graph.db`.
+`NEO4J_USER` / `NEO4J_PASSWORD` default to `neo4j` / `neo4j` (which works when the server has auth disabled, as in `reactome_neo4j_env`). `NEO4J_DATABASE` defaults to `graph.db`. `CYPHER_QUERY_TIMEOUT_MS` defaults to 30000 ms.
 
 ### Utilities (7 tools)
 
