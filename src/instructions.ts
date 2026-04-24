@@ -40,7 +40,7 @@ A local Neo4j Reactome graph is available. Use it when the user wants a query th
 
 **Workflow for Cypher:**
 
-1. Call \`reactome_cypher_schema\` (or read the \`reactome://graph/schema\` resource) **before writing any query** to learn the live labels, relationship types, and properties. Never guess the schema.
+1. Call \`reactome_cypher_schema\` (or read the \`reactome://graph/schema\` resource) **before writing any query**. The schema tool returns labels with node counts, relationship cardinalities, per-label and per-rel property types (with mandatory flags), indexes, and constraints. Pulled live via APOC on first use and cached in-memory for the session (warm after the MCP's startup prefetch). Never guess the schema.
 2. Use \`reactome_cypher_sample\` on a label to see a representative node's shape.
 3. Write a Cypher query with \`reactome_cypher_query\`. Rules:
    - Sessions run in READ mode; write clauses will be rejected.

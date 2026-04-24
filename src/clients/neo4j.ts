@@ -107,33 +107,5 @@ export async function runRead<T = Record<string, unknown>>(
   }
 }
 
-export interface GraphSchema {
-  labels: string[];
-  relationshipTypes: string[];
-  propertiesByLabel: Record<string, { name: string; types: string[] }[]>;
-}
-
-export async function fetchGraphSchema(): Promise<GraphSchema> {
-  interface LabelRow { label: string }
-  interface RelRow { relationshipType: string }
-  interface PropRow { nodeType: string; propertyName: string; propertyTypes: string[] | null }
-
-  const [labelRows, relRows, propRows] = await Promise.all([
-    runRead<LabelRow>("CALL db.labels() YIELD label RETURN label ORDER BY label"),
-    runRead<RelRow>("CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType ORDER BY relationshipType"),
-    runRead<PropRow>("CALL db.schema.nodeTypeProperties() YIELD nodeType, propertyName, propertyTypes RETURN nodeType, propertyName, propertyTypes"),
-  ]);
-
-  const propertiesByLabel: Record<string, { name: string; types: string[] }[]> = {};
-  for (const p of propRows) {
-    const entry = propertiesByLabel[p.nodeType] ?? [];
-    entry.push({ name: p.propertyName, types: p.propertyTypes ?? [] });
-    propertiesByLabel[p.nodeType] = entry;
-  }
-
-  return {
-    labels: labelRows.map((l) => l.label),
-    relationshipTypes: relRows.map((r) => r.relationshipType),
-    propertiesByLabel,
-  };
-}
+// Graph-schema access lives in src/graph/schema.ts — split out so tests
+// can mock runRead across the module boundary.
