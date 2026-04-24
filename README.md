@@ -198,7 +198,7 @@ Only registered when `NEO4J_URI` is set. Designed for curators running the [`rea
 | Tool | Description |
 |------|-------------|
 | `reactome_cypher_query` | Run a Cypher query with optional parameters; row count, per-row size, and total response size are all capped; a server-side timeout terminates runaway queries |
-| `reactome_cypher_schema` | Introspect labels, relationship types, and per-label property keys |
+| `reactome_cypher_schema` | Live APOC introspection: labels with node counts, relationship cardinalities, per-label and per-rel property types (with mandatory flags), indexes, constraints. Cached for the session after first call; pre-warmed at MCP startup. |
 | `reactome_cypher_sample` | Return a small sample of nodes for a given label |
 
 **Read-only posture — what it is and isn't.** Sessions run in Neo4j READ mode, which rejects native write clauses (`CREATE`, `MERGE`, `DELETE`, `SET`, `REMOVE`). On top of that, `reactome_cypher_query` rejects APOC procedures that can write or reach outside the graph through back-channels (`apoc.cypher.runWrite` / `apoc.cypher.doIt`, `apoc.periodic.*`, `apoc.create/merge/refactor.*`, `apoc.load/import/export.*`, `apoc.trigger.*`, `apoc.nodes.delete`). Treat this as a guardrail against accidental mutation, not a security boundary — a real trust boundary should live at the Neo4j RBAC / plugin configuration layer, or by pointing at a read-only replica.

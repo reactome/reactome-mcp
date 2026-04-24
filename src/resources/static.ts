@@ -1,7 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { contentClient } from "../clients/content.js";
 import type { Species, Disease } from "../types/index.js";
-import { isNeo4jConfigured, fetchGraphSchema } from "../clients/neo4j.js";
+import { isNeo4jConfigured } from "../clients/neo4j.js";
+import { fetchGraphSchema } from "../graph/schema.js";
 
 export function registerStaticResources(server: McpServer) {
   // All species

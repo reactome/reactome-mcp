@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-04-24
+
+### Changed
+- **`reactome_cypher_schema` and `reactome://graph/schema` now return rich APOC-level data.** The previous implementation used the sparse built-in `db.schema.*` (labels / rel types / property names only). This release pulls `apoc.meta.schema()`, `apoc.meta.stats()`, `apoc.meta.{node,rel}TypeProperties()`, `db.indexes()`, `db.constraints()`, and `dbms.components()` — so clients see **per-label node counts**, **relationship cardinalities**, **property types with mandatory flags**, indexes, and constraints. The markdown digest jumps from ~40 KB (sparse) to ~80 KB (rich).
+- Fetch is lazy + cached in-memory for the session. Concurrent first-callers share one round-trip via promise deduplication.
+
+### Added
+- **Startup schema prefetch.** `main()` fires `fetchGraphSchema()` in the background once the MCP is listening, so the first `reactome_cypher_schema` call doesn't wait 15–30 s on `apoc.meta.schema()` (that procedure samples 3M nodes on Reactome). Failures are logged; the cache stays empty and the next tool call retries on demand.
+- 7 new tests: markdown format coverage (4) + cache behavior (caching, concurrent dedup, optional-call fallback).
+
+### Removed
+- The sparse `db.schema.*`-based schema path. No fallback — APOC is required for the Cypher schema tool. This is fine for the `reactome_neo4j_env` Docker image (APOC is always present); other deployments must load APOC for schema tooling to work.
+
+### Notes
+- **No vendored schema artifact.** The MCP fetches live on connect. No coordination with `reactome_neo4j_env` release cadence is required.
+
 ## [1.3.1] — 2026-04-21
 
 ### Added

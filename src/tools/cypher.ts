@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { runRead, fetchGraphSchema } from "../clients/neo4j.js";
+import { runRead } from "../clients/neo4j.js";
+import { fetchGraphSchema } from "../graph/schema.js";
+import { formatGraphSchemaMarkdown } from "../graph/format-schema.js";
 import { logger } from "../logger.js";
 import { rejectWriteThroughCalls } from "./cypher-guard.js";
 
@@ -135,35 +137,13 @@ export function registerCypherTools(server: McpServer) {
 
   server.tool(
     "reactome_cypher_schema",
-    "Introspect the Reactome graph schema — node labels, relationship types, and per-label property keys. Use this first to plan queries.",
+    "Introspect the Reactome graph schema — labels with node counts, relationship types with cardinalities, per-label and per-rel property types (with mandatory flags), indexes, and constraints. Fetched live from the database via APOC on first call and cached in-memory for the rest of the session (~100–300 ms one-time). Call this before writing Cypher. For the full JSON (including the raw apoc.meta.schema() object), read the `reactome://graph/schema` resource.",
     {},
     async () => {
       logger.info("cypher_schema");
       const schema = await fetchGraphSchema();
-
-      const lines: string[] = [
-        `## Reactome Graph Schema`,
-        "",
-        `### Labels (${schema.labels.length})`,
-        ...schema.labels.map((l) => `- \`${l}\``),
-        "",
-        `### Relationship Types (${schema.relationshipTypes.length})`,
-        ...schema.relationshipTypes.map((r) => `- \`${r}\``),
-        "",
-        `### Properties by Label`,
-      ];
-
-      const sortedKeys = Object.keys(schema.propertiesByLabel).sort();
-      for (const key of sortedKeys) {
-        lines.push(`- **${key}**`);
-        for (const p of schema.propertiesByLabel[key]) {
-          const typeStr = p.types.length ? ` _(${p.types.join("|")})_` : "";
-          lines.push(`  - \`${p.name}\`${typeStr}`);
-        }
-      }
-
       return {
-        content: [{ type: "text", text: lines.join("\n") }],
+        content: [{ type: "text", text: formatGraphSchemaMarkdown(schema) }],
       };
     }
   );
