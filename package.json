@@ -20,7 +20,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "inspect": "npx @anthropic-ai/mcp-inspector node dist/index.js",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
     "demo": "node web/mcp-bridge.js",
     "demo:simple": "node web/server.js"
   },
