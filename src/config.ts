@@ -13,6 +13,23 @@ export const CONTENT_SERVICE_URL =
 export const ANALYSIS_SERVICE_URL =
   process.env.REACTOME_ANALYSIS_SERVICE_URL ?? `${REACTOME_BASE_URL}/AnalysisService/`;
 
+/**
+ * ReactomeGSA, which is a different service from the Analysis Service and does
+ * a different thing.
+ *
+ *   AnalysisService  over-representation over a list of identifiers
+ *   ReactomeGSA      gene set analysis over an expression matrix -- PADOG,
+ *                    Camera ("similar to the classical GSEA algorithm"),
+ *                    ssGSEA, terapadog
+ *
+ * Nothing here talked to it until now, which is why a user asking this server's
+ * chatbot to "run a GSEA" was told Reactome could not, and offered fgsea and a
+ * YouTube tutorial instead. Reactome can; it just was not reachable from here.
+ */
+export const GSA_SERVICE_URL = normalizeBaseUrl(
+  process.env.REACTOME_GSA_SERVICE_URL ?? "https://gsa.reactome.org/0.1"
+);
+
 export const DEFAULT_SPECIES = "Homo sapiens";
 export const DEFAULT_PAGE_SIZE = 25;
 

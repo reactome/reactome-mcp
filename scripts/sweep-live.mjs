@@ -49,6 +49,7 @@ const ARGS = {
   format: "png",
   type: "pathways",
   pathways: ["R-HSA-109581"],
+  keywords: "melanoma",
 };
 
 /**
@@ -67,6 +68,8 @@ const TOOL_ARGS = {
   // A correctly-spelled term legitimately returns nothing, which tells us
   // only that the call succeeded. A misspelling exercises the formatter.
   reactome_search_spellcheck: { query: "kinse" },
+  // GSA wants the species NAME; a taxonomy id returns zero results silently.
+  reactome_gsa_search_datasets: { keywords: "melanoma", species: "Homo sapiens" },
   reactome_psicquic_summary: { resource: "IntAct", accession: "P04637" },
   reactome_psicquic_details: { resource: "IntAct", accession: "P04637" },
 };
@@ -110,6 +113,11 @@ const EXPECT = {
   reactome_analyze_identifiers: ["R-HSA-"],
   reactome_complex_subunits: ["R-HSA-"],
   reactome_events_hierarchy: ["R-HSA-"],
+  reactome_gsa_methods: ["PADOG", "Camera", "reactome.org/gsa"],
+  reactome_gsa_data_types: ["rnaseq_counts", "reactome_analyze_identifiers"],
+  reactome_gsa_search_datasets: ["Homo sapiens"],
+  reactome_gsa_examples: ["EXAMPLE_"],
+  reactome_gsa_sources: ["Expression Atlas"],
 };
 
 /**
