@@ -1,0 +1,6 @@
+# Revisions that only reformat. Ignore them in blame:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub reads this file automatically.
+
+# Apply Prettier to src/ and tests/
+d58da7c67562e1c14af428f696496eb956012642
