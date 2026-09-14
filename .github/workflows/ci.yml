@@ -25,7 +25,12 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
+      # Typechecks with TypeScript 7, the compiler the build uses.
       - run: npm run typecheck
+      # And again with TypeScript 6, the compiler typescript-eslint uses. Two
+      # compilers are in the tree by necessity; this is what stops them
+      # disagreeing silently.
+      - run: npm run typecheck:lint-compiler
       # The build was never run in CI, so nothing caught a broken emit until
       # someone published.
       - run: npm run build

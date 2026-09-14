@@ -23,8 +23,12 @@ All notable changes to this project are documented here. This project adheres to
 - CI now runs lint, format check, typecheck, **build** and coverage. The build had never run in CI.
 - Test suite: 41 → 64 tests.
 
+- **TypeScript 5.9 → 7**, via the side-by-side arrangement the TypeScript team documents. The build and typecheck run TypeScript 7 (installed as the alias `typescript-7`); the package named `typescript` stays at 6.0.3 because that is the newest typescript-eslint supports. Builds go from ~2.6s to ~0.38s, and `npm run check` typechecks with both compilers so they cannot diverge silently. TypeScript 6 stopped auto-including `@types/*`, so `tsconfig.json` now names `"types": ["node"]` — the lint config already did.
+
+  Scripts invoke the compiler **by path** rather than calling `tsc`: both packages ship a `tsc` binary, and `node_modules/.bin/tsc` was observed pointing at 7.0.2 after an incremental install and 6.0.3 after a clean `npm ci` on the same tree. A bare `tsc` would compile with a different compiler depending on how the tree was installed.
+
 ### Held
-- **TypeScript 7.** typescript-eslint does not support it, and taking it would mean dropping the type-aware linting that found two of the bugs above. Tracked in #29; dependabot is configured to ignore TypeScript major bumps until that closes.
+- **Moving the `typescript` package itself to 7.** typescript-eslint throws on TS >= 7, so bumping it would disable linting while changing nothing about the build, which already uses 7. Tracked in #29; dependabot ignores TypeScript major bumps until it closes, at which point the alias goes away.
 
 ## [1.4.0] — 2026-04-24
 

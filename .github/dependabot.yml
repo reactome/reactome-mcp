@@ -9,12 +9,17 @@ updates:
     labels:
       - dependencies
     ignore:
-      # TypeScript is held at 5.x: typescript-eslint does not support TS 7, and
-      # taking it would mean dropping the type-aware linting that found two real
-      # bugs the week it was added. Without this rule dependabot reopens the
-      # same PR every Monday and the decision gets relitigated weekly.
+      # `typescript` is held at 6.x on purpose. It is not the compiler that
+      # builds this project -- that is TypeScript 7, installed as the alias
+      # `typescript-7` -- it is the copy typescript-eslint loads, and
+      # typescript-eslint throws on TS >= 7. Bumping this package to 7 would
+      # disable linting entirely while changing nothing about the build.
       #
-      # Remove this when reactome/reactome-mcp#29 closes.
+      # Without this rule dependabot reopens the same PR every Monday and the
+      # decision gets relitigated weekly.
+      #
+      # Remove this when reactome/reactome-mcp#29 closes, at which point
+      # `typescript` moves to 7 and the `typescript-7` alias goes away.
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
