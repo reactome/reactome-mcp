@@ -3,12 +3,41 @@ import { z } from "zod";
 import { contentClient } from "../clients/content.js";
 import type { PhysicalEntity, Complex, ReferenceEntity, Event } from "../types/index.js";
 
+/**
+ * `/data/participants/{id}` returns a *reduced* projection, not a full
+ * PhysicalEntity. Verified against the live Content Service:
+ *
+ *   {"displayName": "...", "peDbId": 109581, "schemaClass": "Complex",
+ *    "refEntities": [{"dbId":..., "identifier": "Q15628", ...}]}
+ *
+ * There is no `stId`, no `dbId` and no singular `referenceEntity` -- reading
+ * those printed "(undefined)" and silently dropped every external identifier.
+ */
 interface Participant {
-  dbId: number;
-  stId?: string;
+  peDbId: number;
   displayName: string;
   schemaClass: string;
-  referenceEntity?: ReferenceEntity;
+  refEntities?: ReferenceEntity[];
+}
+
+/**
+ * `/data/entity/{id}/componentOf` returns one entry per *relationship type*,
+ * each carrying parallel arrays of the containers reached by it:
+ *
+ *   {"type": "hasEvent", "names": ["Programmed Cell Death"],
+ *    "stIds": ["R-HSA-5357801"], "schemaClasses": ["TopLevelPathway"],
+ *    "species": ["Homo sapiens"]}
+ *
+ * It is not a list of Complex objects -- there is no displayName/stId/
+ * schemaClass on an entry, so the old formatting printed "**undefined**
+ * (undefined) [undefined]" for every container.
+ */
+interface ComponentOfEntry {
+  type: string;
+  names?: string[];
+  stIds?: string[];
+  schemaClasses?: string[];
+  species?: string[];
 }
 
 interface EnhancedEntity extends PhysicalEntity {
@@ -159,17 +188,30 @@ export function registerEntityTools(server: McpServer) {
       id: z.string().max(2048).describe("Entity stable ID or database ID"),
     },
     async ({ id }) => {
-      const containers = await contentClient.get<Complex[]>(`/data/entity/${encodeURIComponent(id)}/componentOf`);
+      const containers = await contentClient.get<ComponentOfEntry[]>(`/data/entity/${encodeURIComponent(id)}/componentOf`);
+
+      // Each entry holds several containers, so the count people care about is
+      // the flattened one, not the number of relationship types.
+      const total = containers.reduce((n, c) => n + (c.stIds?.length ?? 0), 0);
 
       const lines = [
         `## Structures Containing ${id}`,
-        `**Total:** ${containers.length}`,
+        `**Total:** ${total}`,
         "",
-        ...containers.slice(0, 50).map(c => `- **${c.displayName}** (${c.stId}) [${c.schemaClass}]`),
+        ...containers.flatMap(c =>
+          // A componentOf entry is one *relationship* ("hasEvent",
+          // "hasComponent", ...) carrying parallel arrays of the containers
+          // reached by it -- names[i] pairs with stIds[i] and schemaClasses[i].
+          // There is no singular displayName/stId/schemaClass on the entry.
+          (c.stIds ?? []).map((stId, i) =>
+            `- **${c.names?.[i] ?? stId}** (${stId}) [${c.schemaClasses?.[i] ?? c.type}]`
+          )
+        ),
       ];
 
-      if (containers.length > 50) {
-        lines.push(`... and ${containers.length - 50} more structures`);
+      if (total > 50) {
+        lines.splice(53);
+        lines.push(`... and ${total - 50} more structures`);
       }
 
       return {
@@ -205,8 +247,9 @@ export function registerEntityTools(server: McpServer) {
       Object.entries(byType).forEach(([type, entities]) => {
         lines.push(`### ${type} (${entities.length}):`);
         entities.slice(0, 20).forEach(e => {
-          const refInfo = e.referenceEntity ? ` [${e.referenceEntity.identifier}]` : "";
-          lines.push(`- ${e.displayName} (${e.stId || e.dbId})${refInfo}`);
+          const ids = (e.refEntities ?? []).map(r => r.identifier).filter(Boolean);
+          const refInfo = ids.length > 0 ? ` [${ids.join(", ")}]` : "";
+          lines.push(`- ${e.displayName} (${e.peDbId})${refInfo}`);
         });
         if (entities.length > 20) {
           lines.push(`... and ${entities.length - 20} more`);

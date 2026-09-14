@@ -8,32 +8,64 @@ interface PsicquicResource {
   active: boolean;
 }
 
-interface InteractorSummary {
-  accession: string;
+/**
+ * All four interactor endpoints -- psicquic summary/details and static
+ * summary/details -- return the SAME envelope. Verified against the live
+ * Content Service:
+ *
+ *   GET /interactors/static/molecule/P04637/details
+ *   {"resource": "static",
+ *    "entities": [{"acc": "P04637", "count": 249,
+ *                  "interactors": [{"acc": "Q00987", "alias": "MDM2",
+ *                                   "score": 0.995, "evidences": 122}]}]}
+ *
+ * `entities` is the list of molecules that were *queried*, not the list of
+ * interactors -- those hang off each entity. The previous types flattened the
+ * two levels and used `accession` where the API says `acc`, so the summary
+ * tools printed "undefined" for both protein and count, and the details tools
+ * crashed on `e.score.toFixed` because `score` lives one level down.
+ */
+interface InteractorEnvelope {
+  resource: string;
+  entities?: InteractorEntity[];
+}
+
+interface InteractorEntity {
+  acc: string;
   count: number;
+  interactors?: Interactor[];
 }
 
-interface InteractionDetails {
-  accession: string;
-  entities: InteractionEntity[];
-}
-
-interface InteractionEntity {
-  accession: string;
+interface Interactor {
+  acc: string;
   score: number;
-  interactorId?: number;
   alias?: string;
+  evidences?: number;
+  id?: number;
 }
 
-interface StaticInteractionDetails {
-  accession: string;
-  interactsWith: StaticInteractor[];
+/**
+ * Reduce the envelope to the single queried molecule. These tools always ask
+ * about one accession, so there is exactly one entity -- but the API still
+ * wraps it in an array, and an unknown accession yields an empty one.
+ */
+function firstEntity(result: InteractorEnvelope): InteractorEntity | undefined {
+  return result.entities?.[0];
 }
 
-interface StaticInteractor {
-  accession: string;
-  score: number;
-  chemicalId?: string;
+function formatInteractors(interactors: Interactor[], limit = 30): string[] {
+  const lines = [...interactors]
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .slice(0, limit)
+    .map(i => {
+      const score = typeof i.score === "number" ? i.score.toFixed(3) : "n/a";
+      return `- **${i.acc}** (score: ${score})${i.alias ? ` - ${i.alias}` : ""}`;
+    });
+
+  if (interactors.length > limit) {
+    lines.push(`... and ${interactors.length - limit} more interactors`);
+  }
+  return lines;
 }
 
 export function registerInteractorTools(server: McpServer) {
@@ -77,15 +109,16 @@ export function registerInteractorTools(server: McpServer) {
       accession: z.string().max(2048).describe("Protein accession (e.g., UniProt ID)"),
     },
     async ({ resource, accession }) => {
-      const result = await contentClient.get<InteractorSummary>(
+      const result = await contentClient.get<InteractorEnvelope>(
         `/interactors/psicquic/molecule/${encodeURIComponent(resource)}/${encodeURIComponent(accession)}/summary`
       );
+      const entity = firstEntity(result);
 
       const lines = [
         `## PSICQUIC Interaction Summary`,
-        `**Protein:** ${result.accession}`,
+        `**Protein:** ${entity?.acc ?? accession}`,
         `**Resource:** ${resource}`,
-        `**Interaction count:** ${result.count}`,
+        `**Interaction count:** ${entity?.count ?? 0}`,
       ];
 
       return {
@@ -103,24 +136,23 @@ export function registerInteractorTools(server: McpServer) {
       accession: z.string().max(2048).describe("Protein accession"),
     },
     async ({ resource, accession }) => {
-      const result = await contentClient.get<InteractionDetails>(
+      const result = await contentClient.get<InteractorEnvelope>(
         `/interactors/psicquic/molecule/${encodeURIComponent(resource)}/${encodeURIComponent(accession)}/details`
       );
+      const entity = firstEntity(result);
+      const interactors = entity?.interactors ?? [];
 
       const lines = [
-        `## PSICQUIC Interactions for ${result.accession}`,
+        `## PSICQUIC Interactions for ${entity?.acc ?? accession}`,
         `**Resource:** ${resource}`,
-        `**Interactors found:** ${result.entities.length}`,
+        `**Interactors found:** ${interactors.length}`,
         "",
-        "### Interacting Proteins (sorted by score):",
-        ...result.entities
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 30)
-          .map(e => `- **${e.accession}** (score: ${e.score.toFixed(3)})${e.alias ? ` - ${e.alias}` : ""}`),
       ];
 
-      if (result.entities.length > 30) {
-        lines.push(`... and ${result.entities.length - 30} more interactors`);
+      if (interactors.length > 0) {
+        lines.push("### Interacting Proteins (sorted by score):", ...formatInteractors(interactors));
+      } else {
+        lines.push(`*No interactions found in ${resource}.*`);
       }
 
       return {
@@ -137,36 +169,20 @@ export function registerInteractorTools(server: McpServer) {
       accession: z.string().max(2048).describe("Protein accession (e.g., UniProt ID)"),
     },
     async ({ accession }) => {
-      interface StaticDetailsResult {
-        accession: string;
-        entities: Array<{
-          acc: string;
-          score: number;
-        }>;
-      }
-
-      const result = await contentClient.get<StaticDetailsResult>(
+      const result = await contentClient.get<InteractorEnvelope>(
         `/interactors/static/molecule/${encodeURIComponent(accession)}/details`
       );
+      const entity = firstEntity(result);
+      const interactors = entity?.interactors ?? [];
 
       const lines = [
-        `## Static Interactors for ${result.accession}`,
-        `**Interactors found:** ${result.entities?.length || 0}`,
+        `## Static Interactors for ${entity?.acc ?? accession}`,
+        `**Interactors found:** ${interactors.length}`,
         "",
       ];
 
-      if (result.entities && result.entities.length > 0) {
-        lines.push("### Interacting Proteins:");
-        result.entities
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 30)
-          .forEach(e => {
-            lines.push(`- **${e.acc}** (score: ${e.score.toFixed(3)})`);
-          });
-
-        if (result.entities.length > 30) {
-          lines.push(`... and ${result.entities.length - 30} more interactors`);
-        }
+      if (interactors.length > 0) {
+        lines.push("### Interacting Proteins:", ...formatInteractors(interactors));
       } else {
         lines.push("*No interactors found in the static database.*");
       }
@@ -214,18 +230,14 @@ export function registerInteractorTools(server: McpServer) {
       accession: z.string().max(2048).describe("Protein accession"),
     },
     async ({ accession }) => {
-      interface SummaryResult {
-        accession: string;
-        count: number;
-      }
-
-      const result = await contentClient.get<SummaryResult>(
+      const result = await contentClient.get<InteractorEnvelope>(
         `/interactors/static/molecule/${encodeURIComponent(accession)}/summary`
       );
+      const entity = firstEntity(result);
 
       const lines = [
-        `## Interactor Summary for ${result.accession}`,
-        `**Total interactions:** ${result.count}`,
+        `## Interactor Summary for ${entity?.acc ?? accession}`,
+        `**Total interactions:** ${entity?.count ?? 0}`,
       ];
 
       return {
