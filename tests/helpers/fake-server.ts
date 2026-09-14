@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z, type ZodTypeAny } from "zod";
 
 export interface CapturedTool {
   name: string;
@@ -39,10 +40,27 @@ export function createFakeServer() {
     return [...tools.keys()];
   }
 
+  /**
+   * Call a tool the way the SDK does: validate the arguments against the
+   * registered zod schema first, then hand the parsed result to the handler.
+   *
+   * Calling the handler with raw params -- which this helper used to do --
+   * skips zod entirely, so defaults never materialise and invalid input is
+   * never rejected. A test could then pass while the real server returned
+   * `/data/eventsHierarchy/undefined`, and none of the `nonEmptyString`
+   * validation was exercised at all.
+   */
   function invoke(name: string, params: Record<string, unknown> = {}) {
     const tool = tools.get(name);
     if (!tool) throw new Error(`tool not registered: ${name}`);
-    return tool.handler(params);
+
+    const shape = tool.schema as Record<string, ZodTypeAny>;
+    const parsed =
+      shape && Object.keys(shape).length > 0
+        ? (z.object(shape).parse(params) as Record<string, unknown>)
+        : params;
+
+    return tool.handler(parsed);
   }
 
   function readResource(uri: string) {

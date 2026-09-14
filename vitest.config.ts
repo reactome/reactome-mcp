@@ -16,10 +16,10 @@ export default defineConfig({
       // tools still have no test, which is how a token-parsing bug and nine
       // wrong field paths all shipped unnoticed.
       thresholds: {
-        lines: 50,
-        functions: 46,
-        branches: 42,
-        statements: 50,
+        lines: 52,
+        functions: 48,
+        branches: 45,
+        statements: 53,
       },
     },
   },

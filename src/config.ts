@@ -60,3 +60,22 @@ export const CYPHER_QUERY_TIMEOUT_MS = parsePositiveInt(
   process.env.CYPHER_QUERY_TIMEOUT_MS,
   30_000
 );
+
+/**
+ * Backstop on how much text one tool may return.
+ *
+ * Every tool result is spent from the model's context window, and several here
+ * can be far larger than they look: `reactome_query` on Metabolism renders
+ * ~60 KB (~15k tokens) and `reactome_events_hierarchy` ~86 KB (~22k tokens),
+ * because the size is driven by the ID that was asked about rather than by
+ * anything the tool decides. A single call could crowd out the conversation it
+ * was meant to inform.
+ *
+ * This is a backstop, not a target -- tools should page or summarise long
+ * before reaching it. It matches the Cypher tool's existing total-size default,
+ * which had this guard from the start while the REST tools had none.
+ */
+export const MAX_TOOL_RESPONSE_CHARS = parsePositiveInt(
+  process.env.MAX_TOOL_RESPONSE_CHARS,
+  40_000
+);

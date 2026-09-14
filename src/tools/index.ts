@@ -13,6 +13,8 @@ import { registerInteractorTools } from "./interactors.js";
 import { registerCypherTools } from "./cypher.js";
 import { isNeo4jConfigured } from "../clients/neo4j.js";
 import { withNewRequestContext } from "../context.js";
+import { capToolResult } from "../response-limits.js";
+import { MAX_TOOL_RESPONSE_CHARS } from "../config.js";
 
 /**
  * Wrap `server.tool` so every handler runs inside a fresh request context.
@@ -20,7 +22,15 @@ import { withNewRequestContext } from "../context.js";
  * log line emitted during that invocation — giving one correlation handle
  * across tool → client → retry → error log.
  */
-function installRequestContextWrapper(server: McpServer) {
+/**
+ * Wrap every tool handler once, at registration.
+ *
+ * Two things ride here: a fresh request context so log lines from one call can
+ * be grepped together, and a cap on how much text the call may return. The cap
+ * belongs at this single point rather than in 56 handlers -- a per-tool guard
+ * is a guard somebody forgets to add to the fifty-seventh.
+ */
+function installToolWrapper(server: McpServer) {
   const original = server.tool.bind(server);
   // The SDK's tool() is an overloaded method; we only ever call the 4-arg
   // form (name, description, schema, handler). Keep the wrapper permissive.
@@ -29,15 +39,20 @@ function installRequestContextWrapper(server: McpServer) {
     if (typeof handler !== "function") {
       return (original as (...a: unknown[]) => unknown)(...args);
     }
-    const wrapped = (params: unknown) =>
-      withNewRequestContext(() => (handler as (p: unknown) => unknown)(params));
+    const toolName = typeof args[0] === "string" ? args[0] : "tool";
+    const wrapped = async (params: unknown) => {
+      const result = await withNewRequestContext(() =>
+        (handler as (p: unknown) => unknown)(params)
+      );
+      return capToolResult(result, toolName);
+    };
     const nextArgs = [...args.slice(0, -1), wrapped];
     return (original as (...a: unknown[]) => unknown)(...nextArgs);
   };
 }
 
 export function registerAllTools(server: McpServer) {
-  installRequestContextWrapper(server);
+  installToolWrapper(server);
 
   registerAnalysisTools(server);
   registerPathwayTools(server);
@@ -53,6 +68,45 @@ export function registerAllTools(server: McpServer) {
 
   // Register utility tools directly here
   registerUtilityTools(server);
+}
+
+/**
+ * Describe a database object that is too large to return, so the caller can ask
+ * again for the part it wants via `reactome_query`'s `attribute` argument.
+ */
+function summariseLargeObject(
+  id: string,
+  result: Record<string, unknown>,
+  totalChars: number
+): string {
+  const describe = (value: unknown): string => {
+    if (Array.isArray(value)) return `array of ${value.length}`;
+    if (value === null) return "null";
+    if (typeof value === "object") return "object";
+    // Not String(value): these come off an untyped JSON object, and String()
+    // on one renders "[object Object]" -- the same quiet wrongness this repo
+    // has shipped before.
+    const text = JSON.stringify(value) ?? typeof value;
+    return text.length > 60 ? `${typeof value}, ${text.length} chars` : text;
+  };
+
+  const entries = Object.entries(result)
+    .map(([key, value]) => [key, describe(value), JSON.stringify(value)?.length ?? 0] as const)
+    .sort((a, b) => b[2] - a[2]);
+
+  return [
+    `## ${typeof result.displayName === "string" ? result.displayName : id}`,
+    "",
+    `This object is ${totalChars.toLocaleString()} characters — too large to return whole ` +
+      `(limit ${MAX_TOOL_RESPONSE_CHARS.toLocaleString()}). Its fields are listed below.`,
+    "",
+    `**Ask for one field** with \`reactome_query\` and the \`attribute\` argument, ` +
+      `e.g. \`{ id: "${id}", attribute: "${entries[0]?.[0] ?? "displayName"}" }\`.`,
+    "",
+    "| field | contents | size |",
+    "| --- | --- | ---: |",
+    ...entries.map(([key, shape, size]) => `| \`${key}\` | ${shape} | ${size.toLocaleString()} |`),
+  ].join("\n");
 }
 
 function registerUtilityTools(server: McpServer) {
@@ -261,14 +315,36 @@ function registerUtilityTools(server: McpServer) {
       attribute: nonEmptyString.optional().describe("Specific attribute to retrieve (optional)"),
     },
     async ({ id, attribute }) => {
-      const endpoint = attribute
-        ? `/data/query/${encodeURIComponent(id)}/${encodeURIComponent(attribute)}`
-        : `/data/query/enhanced/${encodeURIComponent(id)}`;
+      // A single attribute comes back as text/plain, not JSON. Asking for it
+      // with Accept: application/json is answered with HTTP 406, so this
+      // argument had never worked -- every attribute request failed.
+      if (attribute) {
+        const value = await contentClient.getText(
+          `/data/query/${encodeURIComponent(id)}/${encodeURIComponent(attribute)}`
+        );
+        return {
+          content: [{ type: "text", text: `**${attribute}** of ${id}:\n\n${value}` }],
+        };
+      }
 
-      const result = await contentClient.get<Record<string, unknown>>(endpoint);
+      const result = await contentClient.get<Record<string, unknown>>(
+        `/data/query/enhanced/${encodeURIComponent(id)}`
+      );
 
+      // Compact, not indented. This endpoint returns whole database objects --
+      // Metabolism is ~48 KB pretty-printed. Dropping the indentation saves
+      // ~23%, and a model does not need the whitespace.
+      const json = JSON.stringify(result);
+      if (json.length <= MAX_TOOL_RESPONSE_CHARS) {
+        return { content: [{ type: "text", text: json }] };
+      }
+
+      // Too big to return whole. Truncating would hand back invalid JSON and
+      // still spend the whole budget, so describe the object's shape instead
+      // and point at the `attribute` argument this tool already accepts. A map
+      // of what is available is worth more than 40 KB of a severed object.
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: summariseLargeObject(id, result, json.length) }],
       };
     }
   );
