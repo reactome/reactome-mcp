@@ -179,9 +179,7 @@ export function registerAnalysisTools(server: McpServer) {
     {
       token: nonEmptyString.describe("Analysis token"),
       pathway: nonEmptyString.describe("Pathway stable ID (e.g., R-HSA-109582)"),
-      resource: z
-        .string()
-        .max(2048)
+      resource: nonEmptyString
         .optional()
         .default("TOTAL")
         .describe("Resource filter (TOTAL, UNIPROT, ENSEMBL, etc.)"),
@@ -274,10 +272,9 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_compare_species",
     "Compare Homo sapiens pathways to another species to identify orthologous pathways.",
     {
-      species: z
-        .string()
-        .max(2048)
-        .describe("Species to compare (taxonomy ID or name, e.g., 'Mus musculus' or '10090')"),
+      species: nonEmptyString.describe(
+        "Species to compare (taxonomy ID or name, e.g., 'Mus musculus' or '10090')"
+      ),
       page: z.number().optional().default(1).describe("Page number"),
       page_size: z.number().optional().default(25).describe("Results per page"),
     },

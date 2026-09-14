@@ -94,9 +94,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_top_pathways",
     "Get all top-level (root) pathways for a species. These are the main pathway categories like 'Immune System', 'Metabolism', etc.",
     {
-      species: z
-        .string()
-        .max(2048)
+      species: nonEmptyString
         .optional()
         .default("Homo sapiens")
         .describe("Species name or taxonomy ID"),
@@ -281,9 +279,7 @@ export function registerPathwayTools(server: McpServer) {
       // returns HTTP 500 for "Homo sapiens" but 200 for "9606", so the
       // previous default made this tool fail every time it was called without
       // an explicit species.
-      species: z
-        .string()
-        .max(2048)
+      species: nonEmptyString
         .optional()
         .default("9606")
         .describe(

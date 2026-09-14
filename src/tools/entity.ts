@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { nonEmptyString } from "../schemas.js";
 import { contentClient } from "../clients/content.js";
 import type { PhysicalEntity, Complex, ReferenceEntity } from "../types/index.js";
@@ -347,10 +346,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_complexes_containing",
     "Find all Reactome complexes that contain a specific external identifier (e.g., UniProt ID).",
     {
-      resource: z
-        .string()
-        .max(2048)
-        .describe("Database name (e.g., 'UniProt', 'ChEBI', 'Ensembl')"),
+      resource: nonEmptyString.describe("Database name (e.g., 'UniProt', 'ChEBI', 'Ensembl')"),
       identifier: nonEmptyString.describe("External identifier (e.g., 'P04637' for UniProt)"),
     },
     async ({ resource, identifier }) => {

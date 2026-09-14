@@ -214,12 +214,7 @@ export function registerExportTools(server: McpServer) {
     "Generate a PDF report for an analysis result.",
     {
       token: nonEmptyString.describe("Analysis token"),
-      species: z
-        .string()
-        .max(2048)
-        .optional()
-        .default("Homo sapiens")
-        .describe("Species for the report"),
+      species: nonEmptyString.optional().default("Homo sapiens").describe("Species for the report"),
       num_pathways: z.number().optional().default(25).describe("Number of top pathways to include"),
       resource: nonEmptyString.optional().default("TOTAL").describe("Resource filter"),
     },
@@ -250,9 +245,7 @@ export function registerExportTools(server: McpServer) {
     {
       token: nonEmptyString.describe("Analysis token"),
       type: z.enum(["pathways", "found_entities", "not_found"]).describe("Type of data to export"),
-      resource: z
-        .string()
-        .max(2048)
+      resource: nonEmptyString
         .optional()
         .default("TOTAL")
         .describe("Resource filter (for pathways and found_entities)"),

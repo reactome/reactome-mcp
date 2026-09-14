@@ -91,13 +91,10 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search",
     "Search the Reactome knowledgebase for pathways, reactions, proteins, genes, compounds, and other entities.",
     {
-      query: z
-        .string()
-        .max(2048)
-        .describe("Search term (gene name, protein, pathway name, disease, etc.)"),
-      species: z
-        .string()
-        .max(2048)
+      query: nonEmptyString.describe(
+        "Search term (gene name, protein, pathway name, disease, etc.)"
+      ),
+      species: nonEmptyString
         .optional()
         .describe("Filter by species (e.g., 'Homo sapiens', 'Mus musculus')"),
       types: z
@@ -244,9 +241,7 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search_facets",
     "Get available facets (filters) for search results, either globally or for a specific query.",
     {
-      query: z
-        .string()
-        .max(2048)
+      query: nonEmptyString
         .optional()
         .describe("Search term (optional, returns global facets if omitted)"),
     },

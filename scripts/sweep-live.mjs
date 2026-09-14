@@ -52,6 +52,67 @@ const ARGS = {
 };
 
 /**
+ * Arguments that only make sense for one tool. Without these the sweep sends a
+ * pathway stable ID to a tool that wants a complex, gets an honest 404, and
+ * reports it as suspicious -- noise that would make a scheduled run red from
+ * the first week and teach everyone to ignore it.
+ */
+const TOOL_ARGS = {
+  reactome_complex_subunits: { id: "R-HSA-5672710" },
+  reactome_entity_other_forms: { id: "R-HSA-69488" },
+  reactome_complexes_containing: { resource: "UniProt", identifier: "P04637" },
+  reactome_mapping_pathways: { resource: "UniProt", identifier: "P04637" },
+  reactome_mapping_reactions: { resource: "UniProt", identifier: "P04637" },
+  reactome_compare_species: { species: "48892" },
+  // A correctly-spelled term legitimately returns nothing, which tells us
+  // only that the call succeeded. A misspelling exercises the formatter.
+  reactome_search_spellcheck: { query: "kinse" },
+  reactome_psicquic_summary: { resource: "IntAct", accession: "P04637" },
+  reactome_psicquic_details: { resource: "IntAct", accession: "P04637" },
+};
+
+/**
+ * A reply that is the service reporting an error is the service answering, not
+ * this repo rendering something wrong. Those are listed separately and do not
+ * fail the run: Reactome returning 500 for a valid-looking orthology request is
+ * not something a release of this package can fix.
+ */
+const SERVICE_ERROR = /^(Content Service|Analysis Service|MCP) error/;
+
+/**
+ * What a healthy answer looks like, for tools whose sweep arguments are known
+ * to return data.
+ *
+ * Marker-grepping alone is not enough, and this repo has the scar to prove it:
+ * `search_facets` rendered its heading, a total, and "*No facets available.*"
+ * for months. No `undefined`, no empty body, nothing to grep for -- just a
+ * confident report that there was nothing to report. Only an expectation of
+ * what should be there can catch a field that was dropped cleanly.
+ *
+ * Every string below was observed in a real response. A failure here means
+ * either this repo stopped rendering something, or Reactome stopped returning
+ * it; both are worth a person looking.
+ */
+const EXPECT = {
+  reactome_search_facets: ["### Types:", "### Species:"],
+  reactome_search_suggest: ["- tp53"],
+  reactome_search_spellcheck: ["Did you mean"],
+  reactome_participants: ["### Complex", "["],
+  reactome_entity_component_of: ["R-HSA-"],
+  reactome_static_interactors: ["score:"],
+  reactome_interactor_summary: ["Total interactions:"],
+  reactome_psicquic_details: ["score:"],
+  reactome_search_diagram: ["R-HSA-"],
+  reactome_search: ["R-HSA-"],
+  reactome_get_pathway: ["Stable ID"],
+  reactome_top_pathways: ["R-HSA-"],
+  reactome_species: ["Homo sapiens"],
+  reactome_analyze_identifiers: ["R-HSA-"],
+  reactome_complex_subunits: ["R-HSA-"],
+  reactome_events_hierarchy: ["R-HSA-"],
+};
+
+/**
  * Markers of a formatter that read a field the API did not return. "undefined"
  * and "[object Object]" are the loud cases; a body with nothing in it is the
  * quiet one, and the quiet one is why `search_facets` went unnoticed.
@@ -135,6 +196,7 @@ async function main() {
   console.log(ARGS.token ? `analysis token: ${ARGS.token}` : "analysis token: NOT OBTAINED");
 
   const suspicious = [];
+  const serviceErrors = [];
   const unreachable = [];
   let called = 0;
 
@@ -146,7 +208,13 @@ async function main() {
       continue;
     }
 
-    const args = Object.fromEntries(required.map(key => [key, ARGS[key]]));
+    const overrides = TOOL_ARGS[tool.name] ?? {};
+    const args = {
+      ...Object.fromEntries(required.map(key => [key, ARGS[key]])),
+      // Overrides may add optional arguments too, not just replace required
+      // ones -- some tools only answer usefully when given a filter.
+      ...overrides,
+    };
     let text;
     try {
       text = await callTool(tool.name, args);
@@ -161,20 +229,49 @@ async function main() {
     if (hits.length > 0) {
       const line = text.split("\n").find(l => hits.some(h => l.includes(h))) ?? "";
       suspicious.push([tool.name, hits.join(", "), line.trim().slice(0, 100)]);
+    } else if (SERVICE_ERROR.test(text.trim())) {
+      serviceErrors.push([tool.name, text.trim().slice(0, 120)]);
     } else if (text.trim().split("\n").filter(Boolean).length <= 1) {
       // A single line is a heading with no body -- either genuinely empty, or
       // a section that was skipped because a field was read at the wrong path.
       suspicious.push([tool.name, "empty body", text.trim().slice(0, 100)]);
+    } else {
+      const missing = (EXPECT[tool.name] ?? []).filter(needle => !text.includes(needle));
+      if (missing.length > 0) {
+        suspicious.push([
+          tool.name,
+          `missing ${missing.map(m => JSON.stringify(m)).join(", ")}`,
+          text.trim().split("\n").slice(0, 2).join(" / ").slice(0, 100),
+        ]);
+      }
     }
   }
 
   child.kill();
 
+  const toolNames = new Set(tools.map(t => t.name));
+  const unknownExpectations = Object.keys(EXPECT).filter(name => !toolNames.has(name));
+
   console.log(`\ncalled ${called} of ${tools.length} tools`);
+  console.log(
+    `checked content expectations for ${Object.keys(EXPECT).length - unknownExpectations.length} of them`
+  );
+  if (unknownExpectations.length > 0) {
+    // A typo here would silently verify nothing, which is the failure mode
+    // this whole script exists to catch.
+    console.log(
+      `  WARNING: expectations named tools that do not exist: ${unknownExpectations.join(", ")}`
+    );
+  }
 
   if (unreachable.length > 0) {
     console.log(`\n${unreachable.length} not reachable with known arguments:`);
     for (const line of unreachable) console.log(`  ${line}`);
+  }
+
+  if (serviceErrors.length > 0) {
+    console.log(`\n${serviceErrors.length} returned a service error (not a failure of this repo):`);
+    for (const [name, sample] of serviceErrors) console.log(`  ${name}\n      ${sample}`);
   }
 
   if (suspicious.length === 0) {
@@ -187,10 +284,6 @@ async function main() {
     console.log(`  ${name}  [${why}]`);
     if (sample) console.log(`      ${sample}`);
   }
-  console.log(
-    "\nSome of these are the service answering a deliberately odd argument" +
-      " with a 404 or 500. Read each one before treating it as a bug."
-  );
   return 1;
 }
 

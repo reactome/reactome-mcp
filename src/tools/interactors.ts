@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { nonEmptyString } from "../schemas.js";
 import { contentClient } from "../clients/content.js";
 import type { Pathway } from "../types/index.js";
@@ -108,10 +107,9 @@ export function registerInteractorTools(server: McpServer) {
     "reactome_psicquic_summary",
     "Get a summary of protein-protein interactions from a PSICQUIC resource.",
     {
-      resource: z
-        .string()
-        .max(2048)
-        .describe("PSICQUIC resource name (e.g., 'IntAct', 'MINT', 'BioGRID')"),
+      resource: nonEmptyString.describe(
+        "PSICQUIC resource name (e.g., 'IntAct', 'MINT', 'BioGRID')"
+      ),
       accession: nonEmptyString.describe("Protein accession (e.g., UniProt ID)"),
     },
     async ({ resource, accession }) => {

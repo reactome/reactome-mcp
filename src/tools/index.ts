@@ -151,10 +151,9 @@ function registerUtilityTools(server: McpServer) {
     "reactome_mapping_pathways",
     "Map an external identifier to Reactome pathways.",
     {
-      resource: z
-        .string()
-        .max(2048)
-        .describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
+      resource: nonEmptyString.describe(
+        "Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"
+      ),
       identifier: nonEmptyString.describe("External identifier"),
     },
     async ({ resource, identifier }) => {
@@ -186,10 +185,9 @@ function registerUtilityTools(server: McpServer) {
     "reactome_mapping_reactions",
     "Map an external identifier to Reactome reactions.",
     {
-      resource: z
-        .string()
-        .max(2048)
-        .describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
+      resource: nonEmptyString.describe(
+        "Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"
+      ),
       identifier: nonEmptyString.describe("External identifier"),
     },
     async ({ resource, identifier }) => {
@@ -260,11 +258,7 @@ function registerUtilityTools(server: McpServer) {
     "Query any Reactome database object by its identifier. Returns detailed information about the object.",
     {
       id: nonEmptyString.describe("Reactome stable ID or database ID"),
-      attribute: z
-        .string()
-        .max(2048)
-        .optional()
-        .describe("Specific attribute to retrieve (optional)"),
+      attribute: nonEmptyString.optional().describe("Specific attribute to retrieve (optional)"),
     },
     async ({ id, attribute }) => {
       const endpoint = attribute
