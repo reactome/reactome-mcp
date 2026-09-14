@@ -1,6 +1,15 @@
 export interface AnalysisResult {
-  token: string;
+  /**
+   * The Analysis Service does NOT return a top-level token -- it is on
+   * `summary.token`. This field was declared here and read by the formatter,
+   * which printed "**Token:** undefined" and left reactome_get_analysis_result
+   * and reactome_analysis_found_entities unreachable, since both require a
+   * token from a previous analysis.
+   */
+  token?: string;
   summary: AnalysisSummary;
+  /** Per-species pathway counts. The only place species information appears. */
+  speciesSummary?: SpeciesSummary[];
   pathways: PathwaySummary[];
   resourceSummary: ResourceSummary[];
   expression?: ExpressionSummary;
@@ -120,4 +129,13 @@ export interface Bin {
 export interface FilteredResult {
   pathways: PathwaySummary[];
   pathwaysFiltered: number;
+}
+
+
+export interface SpeciesSummary {
+  dbId: number;
+  taxId: string;
+  name: string;
+  pathways: number;
+  filtered: number;
 }
