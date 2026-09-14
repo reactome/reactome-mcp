@@ -80,7 +80,7 @@ export function registerCypherTools(server: McpServer) {
         .max(MAX_QUERY_CHARS)
         .describe(`Cypher query to execute (read-only; max ${MAX_QUERY_CHARS} chars)`),
       params: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .optional()
         .describe("Optional parameter map passed to the query"),
       max_rows: z
