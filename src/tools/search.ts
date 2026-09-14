@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { contentClient } from "../clients/content.js";
+import { nonEmptyString } from "../schemas.js";
 import type { SearchResult, SearchEntry, FacetEntry } from "../types/index.js";
 
 /**
@@ -90,24 +91,18 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search",
     "Search the Reactome knowledgebase for pathways, reactions, proteins, genes, compounds, and other entities.",
     {
-      query: z
-        .string()
-        .max(2048)
-        .describe("Search term (gene name, protein, pathway name, disease, etc.)"),
-      species: z
-        .string()
-        .max(2048)
+      query: nonEmptyString.describe(
+        "Search term (gene name, protein, pathway name, disease, etc.)"
+      ),
+      species: nonEmptyString
         .optional()
         .describe("Filter by species (e.g., 'Homo sapiens', 'Mus musculus')"),
       types: z
-        .array(z.string().max(2048))
+        .array(nonEmptyString)
         .optional()
         .describe("Filter by type (Pathway, Reaction, Protein, Gene, Complex, etc.)"),
-      compartments: z
-        .array(z.string().max(2048))
-        .optional()
-        .describe("Filter by cellular compartment"),
-      keywords: z.array(z.string().max(2048)).optional().describe("Filter by keywords"),
+      compartments: z.array(nonEmptyString).optional().describe("Filter by cellular compartment"),
+      keywords: z.array(nonEmptyString).optional().describe("Filter by keywords"),
       rows: z.number().optional().default(25).describe("Number of results to return"),
       cluster: z.boolean().optional().default(true).describe("Cluster related results"),
     },
@@ -154,11 +149,11 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search_paginated",
     "Search Reactome with pagination support for browsing through large result sets.",
     {
-      query: z.string().max(2048).describe("Search term"),
+      query: nonEmptyString.describe("Search term"),
       page: z.number().optional().default(1).describe("Page number (1-based)"),
       rows_per_page: z.number().optional().default(20).describe("Results per page"),
-      species: z.string().max(2048).optional().describe("Filter by species"),
-      types: z.array(z.string().max(2048)).optional().describe("Filter by type"),
+      species: nonEmptyString.optional().describe("Filter by species"),
+      types: z.array(nonEmptyString).optional().describe("Filter by type"),
     },
     async ({ query, page, rows_per_page, species, types }) => {
       const params: Record<string, string | number | boolean | undefined> = {
@@ -197,7 +192,7 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search_suggest",
     "Get auto-complete suggestions for a search query.",
     {
-      query: z.string().max(2048).describe("Partial search term"),
+      query: nonEmptyString.describe("Partial search term"),
     },
     async ({ query }) => {
       const result = await contentClient.get<SuggestResult>("/search/suggest", { query });
@@ -220,7 +215,7 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search_spellcheck",
     "Get spell-check suggestions for a search query.",
     {
-      query: z.string().max(2048).describe("Search term to check"),
+      query: nonEmptyString.describe("Search term to check"),
     },
     async ({ query }) => {
       const result = await contentClient.get<SpellcheckResult>("/search/spellcheck", { query });
@@ -246,9 +241,7 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search_facets",
     "Get available facets (filters) for search results, either globally or for a specific query.",
     {
-      query: z
-        .string()
-        .max(2048)
+      query: nonEmptyString
         .optional()
         .describe("Search term (optional, returns global facets if omitted)"),
     },
@@ -320,7 +313,7 @@ export function registerSearchTools(server: McpServer) {
     "Find all pathways that contain a specific entity by its database ID.",
     {
       db_id: z.number().describe("Reactome database ID of the entity"),
-      species: z.string().max(2048).optional().describe("Filter by species"),
+      species: nonEmptyString.optional().describe("Filter by species"),
       include_interactors: z
         .boolean()
         .optional()
@@ -364,8 +357,8 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search_diagram",
     "Search for entities within a specific pathway diagram.",
     {
-      diagram: z.string().max(2048).describe("Pathway stable ID for the diagram"),
-      query: z.string().max(2048).describe("Search term"),
+      diagram: nonEmptyString.describe("Pathway stable ID for the diagram"),
+      query: nonEmptyString.describe("Search term"),
       include_interactors: z.boolean().optional().default(false).describe("Include interactors"),
     },
     async ({ diagram, query, include_interactors }) => {

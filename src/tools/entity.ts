@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { nonEmptyString } from "../schemas.js";
 import { contentClient } from "../clients/content.js";
 import type { PhysicalEntity, Complex, ReferenceEntity } from "../types/index.js";
 
@@ -106,7 +106,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_get_entity",
     "Get detailed information about a physical entity (protein, complex, compound, etc.) by its Reactome ID.",
     {
-      id: z.string().max(2048).describe("Reactome stable ID (e.g., R-HSA-123456) or database ID"),
+      id: nonEmptyString.describe("Reactome stable ID (e.g., R-HSA-123456) or database ID"),
     },
     async ({ id }) => {
       const entity = await contentClient.get<EnhancedEntity>(
@@ -123,7 +123,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_complex_subunits",
     "Get all subunits (components) of a complex. Recursively retrieves components of nested complexes.",
     {
-      id: z.string().max(2048).describe("Complex stable ID or database ID"),
+      id: nonEmptyString.describe("Complex stable ID or database ID"),
     },
     async ({ id }) => {
       const subunits = await contentClient.get<PhysicalEntity[]>(
@@ -163,7 +163,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_entity_other_forms",
     "Get all other forms of a physical entity (modified forms, in different compartments, in complexes, etc.).",
     {
-      id: z.string().max(2048).describe("Entity stable ID or database ID"),
+      id: nonEmptyString.describe("Entity stable ID or database ID"),
     },
     async ({ id }) => {
       const otherForms = await contentClient.get<PhysicalEntity[]>(
@@ -194,7 +194,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_entity_component_of",
     "Find larger structures (complexes, sets) that contain this entity as a component.",
     {
-      id: z.string().max(2048).describe("Entity stable ID or database ID"),
+      id: nonEmptyString.describe("Entity stable ID or database ID"),
     },
     async ({ id }) => {
       const containers = await contentClient.get<ComponentOfEntry[]>(
@@ -237,7 +237,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_participants",
     "Get all molecular participants (inputs, outputs, catalysts, regulators) in a reaction or pathway.",
     {
-      id: z.string().max(2048).describe("Event (pathway or reaction) stable ID or database ID"),
+      id: nonEmptyString.describe("Event (pathway or reaction) stable ID or database ID"),
     },
     async ({ id }) => {
       const participants = await contentClient.get<Participant[]>(
@@ -278,7 +278,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_participating_physical_entities",
     "Get all physical entities participating in an event (molecules directly involved in reactions).",
     {
-      id: z.string().max(2048).describe("Event stable ID or database ID"),
+      id: nonEmptyString.describe("Event stable ID or database ID"),
     },
     async ({ id }) => {
       const entities = await contentClient.get<PhysicalEntity[]>(
@@ -307,7 +307,7 @@ export function registerEntityTools(server: McpServer) {
     "reactome_reference_entities",
     "Get all reference entities (external database references) for participants in an event.",
     {
-      id: z.string().max(2048).describe("Event stable ID or database ID"),
+      id: nonEmptyString.describe("Event stable ID or database ID"),
     },
     async ({ id }) => {
       const refs = await contentClient.get<ReferenceEntity[]>(
@@ -346,11 +346,8 @@ export function registerEntityTools(server: McpServer) {
     "reactome_complexes_containing",
     "Find all Reactome complexes that contain a specific external identifier (e.g., UniProt ID).",
     {
-      resource: z
-        .string()
-        .max(2048)
-        .describe("Database name (e.g., 'UniProt', 'ChEBI', 'Ensembl')"),
-      identifier: z.string().max(2048).describe("External identifier (e.g., 'P04637' for UniProt)"),
+      resource: nonEmptyString.describe("Database name (e.g., 'UniProt', 'ChEBI', 'Ensembl')"),
+      identifier: nonEmptyString.describe("External identifier (e.g., 'P04637' for UniProt)"),
     },
     async ({ resource, identifier }) => {
       const complexes = await contentClient.get<Complex[]>(
