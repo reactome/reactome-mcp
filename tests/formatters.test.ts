@@ -11,8 +11,8 @@
  * If a payload here stops matching production, that is the signal to update
  * the formatter -- not the fixture.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createFakeServer } from "./helpers/fake-server.js";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
+import { createFakeServer, textOf } from "./helpers/fake-server.js";
 
 import { registerSearchTools } from "../src/tools/search.js";
 import { registerEntityTools } from "../src/tools/entity.js";
@@ -27,7 +27,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("response shape regressions", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: MockInstance<typeof fetch>;
   const fake = createFakeServer();
   registerSearchTools(fake.server);
   registerEntityTools(fake.server);
@@ -47,7 +47,7 @@ describe("response shape regressions", () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse(["tp53:banp", "tp53aip1", "tp53bp1"]));
 
     const result = await fake.invoke("reactome_search_suggest", { query: "TP53" });
-    const text = result.content[0].text;
+    const text = textOf(result);
 
     expect(text).toContain("- tp53:banp");
     expect(text).toContain("- tp53bp1");
@@ -59,14 +59,14 @@ describe("response shape regressions", () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse({ suggestions: [] }));
 
     const result = await fake.invoke("reactome_search_suggest", { query: "TP53" });
-    expect(result.content[0].text).toContain("No suggestions found");
+    expect(textOf(result)).toContain("No suggestions found");
   });
 
   // GET /search/spellcheck?query=kinse
   it("reactome_search_spellcheck reads the bare array the API returns", async () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse(["kinase", "kinases", "kinae"]));
 
-    const text = (await fake.invoke("reactome_search_spellcheck", { query: "kinse" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_search_spellcheck", { query: "kinse" }));
 
     // The old code guarded `result.suggestions`, so this branch was
     // unreachable: every spellcheck reported "no suggestions".
@@ -89,7 +89,7 @@ describe("response shape regressions", () => {
       ])
     );
 
-    const text = (await fake.invoke("reactome_entity_component_of", { id: "R-HSA-109581" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_entity_component_of", { id: "R-HSA-109581" }));
 
     // One entry, two containers -- the count is of containers, not entries.
     expect(text).toContain("**Total:** 2");
@@ -103,7 +103,7 @@ describe("response shape regressions", () => {
       jsonResponse([{ type: "hasComponent", stIds: ["R-HSA-1"] }])
     );
 
-    const text = (await fake.invoke("reactome_entity_component_of", { id: "R-HSA-1" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_entity_component_of", { id: "R-HSA-1" }));
     expect(text).toContain("(R-HSA-1) [hasComponent]");
     expect(text).not.toContain("undefined");
   });
@@ -124,7 +124,7 @@ describe("response shape regressions", () => {
       ])
     );
 
-    const text = (await fake.invoke("reactome_participants", { id: "R-HSA-109581" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_participants", { id: "R-HSA-109581" }));
 
     expect(text).toContain("(140976)");
     // Identifiers were dropped entirely before: the endpoint returns
@@ -138,7 +138,7 @@ describe("response shape regressions", () => {
       jsonResponse([{ displayName: "ATP [cytosol]", peDbId: 113592, schemaClass: "SimpleEntity" }])
     );
 
-    const text = (await fake.invoke("reactome_participants", { id: "R-HSA-1" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_participants", { id: "R-HSA-1" }));
     expect(text).toContain("- ATP [cytosol] (113592)");
     expect(text).not.toContain("undefined");
   });
@@ -155,7 +155,7 @@ describe("response shape regressions", () => {
       })
     );
 
-    const text = (await fake.invoke("reactome_search_facets", {})).content[0].text;
+    const text = textOf(await fake.invoke("reactome_search_facets", {}));
 
     // Every section was silently skipped before: a facet is an object with an
     // `available` array, so reading `.length` on it gave undefined.
@@ -172,7 +172,7 @@ describe("response shape regressions", () => {
   it("reactome_search_facets says so when there are no facets", async () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse({ totalNumFount: 0 }));
 
-    const text = (await fake.invoke("reactome_search_facets", {})).content[0].text;
+    const text = textOf(await fake.invoke("reactome_search_facets", {}));
     expect(text).toContain("*No facets available.*");
   });
 
@@ -194,7 +194,7 @@ describe("response shape regressions", () => {
   it("reactome_static_interactors descends into entities[].interactors", async () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse(interactorEnvelope));
 
-    const text = (await fake.invoke("reactome_static_interactors", { accession: "P04637" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_static_interactors", { accession: "P04637" }));
 
     // `entities` lists the molecules queried, not the interactors -- reading
     // score off it threw "Cannot read properties of undefined (reading 'toFixed')".
@@ -209,7 +209,7 @@ describe("response shape regressions", () => {
       jsonResponse({ resource: "static", entities: [{ acc: "P04637", count: 1, interactors: [{ acc: "Q00987" }] }] })
     );
 
-    const text = (await fake.invoke("reactome_static_interactors", { accession: "P04637" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_static_interactors", { accession: "P04637" }));
     expect(text).toContain("(score: n/a)");
     expect(text).not.toContain("undefined");
   });
@@ -217,7 +217,7 @@ describe("response shape regressions", () => {
   it("reactome_static_interactors handles an unknown accession", async () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse({ resource: "static", entities: [] }));
 
-    const text = (await fake.invoke("reactome_static_interactors", { accession: "NOPE" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_static_interactors", { accession: "NOPE" }));
     expect(text).toContain("Static Interactors for NOPE");
     expect(text).toContain("*No interactors found in the static database.*");
     expect(text).not.toContain("undefined");
@@ -229,7 +229,7 @@ describe("response shape regressions", () => {
       jsonResponse({ resource: "static", entities: [{ acc: "P04637", count: 249 }] })
     );
 
-    const text = (await fake.invoke("reactome_interactor_summary", { accession: "P04637" })).content[0].text;
+    const text = textOf(await fake.invoke("reactome_interactor_summary", { accession: "P04637" }));
     expect(text).toContain("Interactor Summary for P04637");
     expect(text).toContain("**Total interactions:** 249");
     expect(text).not.toContain("undefined");
@@ -239,9 +239,7 @@ describe("response shape regressions", () => {
   it("reactome_psicquic_details uses the same envelope as the static endpoint", async () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse({ ...interactorEnvelope, resource: "IntAct" }));
 
-    const text = (
-      await fake.invoke("reactome_psicquic_details", { resource: "IntAct", accession: "P04637" })
-    ).content[0].text;
+    const text = textOf(await fake.invoke("reactome_psicquic_details", { resource: "IntAct", accession: "P04637" }));
 
     expect(text).toContain("**Interactors found:** 2");
     expect(text).toContain("**Q00987** (score: 0.995) - MDM2");
@@ -253,9 +251,7 @@ describe("response shape regressions", () => {
       jsonResponse({ resource: "IntAct", entities: [{ acc: "P04637", count: 144 }] })
     );
 
-    const text = (
-      await fake.invoke("reactome_psicquic_summary", { resource: "IntAct", accession: "P04637" })
-    ).content[0].text;
+    const text = textOf(await fake.invoke("reactome_psicquic_summary", { resource: "IntAct", accession: "P04637" }));
 
     expect(text).toContain("**Protein:** P04637");
     expect(text).toContain("**Interaction count:** 144");
@@ -274,12 +270,53 @@ describe("response shape regressions", () => {
       })
     );
 
-    const text = (
-      await fake.invoke("reactome_analysis_found_entities", { token: "tok", pathway: "R-HSA-109581" })
-    ).content[0].text;
+    const text = textOf(await fake.invoke("reactome_analysis_found_entities", { token: "tok", pathway: "R-HSA-109581" }));
 
     // A mapsTo entry has `ids` (plural); there is no singular `identifier`.
     expect(text).toContain("- TP53 -> P04637 (UNIPROT)");
     expect(text).not.toContain("undefined");
+  });
+
+  // GET /search/diagram/{id}?query=...
+  it("reactome_search_diagram reads the flat entries array", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        entries: [
+          {
+            dbId: "69488",
+            stId: "R-HSA-69488",
+            id: "R-HSA-69488",
+            name: "TP53",
+            exactType: "ReferenceGeneProduct",
+            species: ["Homo sapiens"],
+            referenceIdentifier: "P04637",
+            referenceName: "TP53",
+          },
+        ],
+        facets: [{ name: "Complex", count: 4 }],
+        found: 13,
+      })
+    );
+
+    const text = textOf(
+      await fake.invoke("reactome_search_diagram", { diagram: "R-HSA-109581", query: "TP53" })
+    );
+
+    // This endpoint returns a flat `entries` list, not the grouped `results`
+    // shape /search/query uses. Sharing the grouped helper threw
+    // "result.results is not iterable" -- the tool never returned an answer.
+    expect(text).toContain("**Found:** 13 results");
+    expect(text).toContain("TP53");
+    expect(text).toContain("R-HSA-69488");
+    expect(text).not.toContain("undefined");
+  });
+
+  it("reactome_search_diagram reports an empty diagram search", async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResponse({ entries: [], facets: [], found: 0 }));
+
+    const text = textOf(
+      await fake.invoke("reactome_search_diagram", { diagram: "R-HSA-1", query: "zzz" })
+    );
+    expect(text).toContain("*No matches in this diagram.*");
   });
 });

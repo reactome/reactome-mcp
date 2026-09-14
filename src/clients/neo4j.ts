@@ -58,9 +58,19 @@ export function getDriver(): Driver {
         driverInstance = null;
       }
     };
-    process.once("SIGINT", shutdown);
-    process.once("SIGTERM", shutdown);
-    process.once("beforeExit", shutdown);
+    // process.once expects a void-returning listener. Handing it an async
+    // function meant a failed close rejected with nobody listening, which Node
+    // will turn into a hard exit on unhandled rejection.
+    const onShutdown = () => {
+      void shutdown().catch(error => {
+        logger.warn("neo4j driver close failed during shutdown", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    };
+    process.once("SIGINT", onShutdown);
+    process.once("SIGTERM", onShutdown);
+    process.once("beforeExit", onShutdown);
   }
   return driverInstance;
 }

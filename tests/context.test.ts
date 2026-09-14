@@ -1,9 +1,15 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { logger } from "../src/logger.js";
 import { withNewRequestContext, currentReqId } from "../src/context.js";
 
+/** stderr.write takes string | Uint8Array; the logger writes strings. */
+function decodeWrite(chunk: string | Uint8Array | undefined): string {
+  if (chunk === undefined) return "{}";
+  return typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
+}
+
 describe("request context", () => {
-  let writeSpy: ReturnType<typeof vi.spyOn>;
+  let writeSpy: MockInstance<typeof process.stderr.write>;
 
   beforeEach(() => {
     writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -15,7 +21,7 @@ describe("request context", () => {
 
   it("logger omits reqId when no context is active", () => {
     logger.info("outside context");
-    const payload = JSON.parse(String(writeSpy.mock.calls.at(-1)?.[0] ?? "{}"));
+    const payload = JSON.parse(decodeWrite(writeSpy.mock.calls.at(-1)?.[0]));
     expect(payload.reqId).toBeUndefined();
     expect(payload.msg).toBe("outside context");
   });
@@ -24,7 +30,7 @@ describe("request context", () => {
     await withNewRequestContext(async () => {
       logger.info("inside context");
     });
-    const payload = JSON.parse(String(writeSpy.mock.calls.at(-1)?.[0] ?? "{}"));
+    const payload = JSON.parse(decodeWrite(writeSpy.mock.calls.at(-1)?.[0]));
     expect(typeof payload.reqId).toBe("string");
     expect(payload.reqId.length).toBeGreaterThan(0);
   });

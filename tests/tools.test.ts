@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createFakeServer } from "./helpers/fake-server.js";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
+import { createFakeServer, textOf, calledUrl } from "./helpers/fake-server.js";
 
 import { registerPathwayTools } from "../src/tools/pathway.js";
 import { registerSearchTools } from "../src/tools/search.js";
@@ -14,7 +14,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("pathway tools", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: MockInstance<typeof fetch>;
   const fake = createFakeServer();
   registerPathwayTools(fake.server);
 
@@ -40,11 +40,11 @@ describe("pathway tools", () => {
     );
 
     const result = await fake.invoke("reactome_get_pathway", { id: "R-HSA-109582" });
-    const [url] = fetchSpy.mock.calls[0];
-    expect(String(url)).toContain("/data/query/enhanced/R-HSA-109582");
-    expect(result.content[0].text).toContain("Hemostasis");
-    expect(result.content[0].text).toContain("R-HSA-109582");
-    expect(result.content[0].text).toContain("Process that stops bleeding.");
+    
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("/data/query/enhanced/R-HSA-109582");
+    expect(textOf(result)).toContain("Hemostasis");
+    expect(textOf(result)).toContain("R-HSA-109582");
+    expect(textOf(result)).toContain("Process that stops bleeding.");
   });
 
   it("reactome_top_pathways lists pathways for the given species", async () => {
@@ -56,16 +56,16 @@ describe("pathway tools", () => {
     );
 
     const result = await fake.invoke("reactome_top_pathways", { species: "Homo sapiens" });
-    const [url] = fetchSpy.mock.calls[0];
-    expect(String(url)).toContain("/data/pathways/top/Homo%20sapiens");
-    expect(result.content[0].text).toContain("Cell Cycle");
-    expect(result.content[0].text).toContain("Metabolism");
-    expect(result.content[0].text).toContain("**Total:** 2");
+    
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("/data/pathways/top/Homo%20sapiens");
+    expect(textOf(result)).toContain("Cell Cycle");
+    expect(textOf(result)).toContain("Metabolism");
+    expect(textOf(result)).toContain("**Total:** 2");
   });
 });
 
 describe("search tools", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: MockInstance<typeof fetch>;
   const fake = createFakeServer();
   registerSearchTools(fake.server);
 
@@ -106,12 +106,12 @@ describe("search tools", () => {
       rows: 25,
       cluster: true,
     });
-    const [url] = fetchSpy.mock.calls[0];
-    expect(String(url)).toContain("/search/query");
-    expect(String(url)).toContain("query=TP53");
-    expect(String(url)).toContain("species=Homo+sapiens");
-    expect(result.content[0].text).toContain("TP53 Regulates Transcription");
-    expect(result.content[0].text).toContain("**Found:** 1 results");
+    
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("/search/query");
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("query=TP53");
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("species=Homo+sapiens");
+    expect(textOf(result)).toContain("TP53 Regulates Transcription");
+    expect(textOf(result)).toContain("**Found:** 1 results");
   });
 
   it("reactome_search joins array filters into comma-separated params", async () => {
@@ -127,14 +127,14 @@ describe("search tools", () => {
       cluster: true,
     });
 
-    const [url] = fetchSpy.mock.calls[0];
-    expect(String(url)).toContain("types=Pathway%2CReaction");
-    expect(String(url)).toContain("compartments=nucleus");
+    
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("types=Pathway%2CReaction");
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("compartments=nucleus");
   });
 });
 
 describe("entity tools", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: MockInstance<typeof fetch>;
   const fake = createFakeServer();
   registerEntityTools(fake.server);
 
@@ -158,15 +158,15 @@ describe("entity tools", () => {
     );
 
     const result = await fake.invoke("reactome_get_entity", { id: "R-HSA-123456" });
-    const [url] = fetchSpy.mock.calls[0];
-    expect(String(url)).toContain("/data/query/enhanced/R-HSA-123456");
-    expect(result.content[0].text).toContain("TP53 protein");
-    expect(result.content[0].text).toContain("R-HSA-123456");
+    
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("/data/query/enhanced/R-HSA-123456");
+    expect(textOf(result)).toContain("TP53 protein");
+    expect(textOf(result)).toContain("R-HSA-123456");
   });
 });
 
 describe("interactor tools", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: MockInstance<typeof fetch>;
   const fake = createFakeServer();
   registerInteractorTools(fake.server);
 
@@ -187,9 +187,9 @@ describe("interactor tools", () => {
     );
 
     const result = await fake.invoke("reactome_psicquic_resources", {});
-    const [url] = fetchSpy.mock.calls[0];
-    expect(String(url)).toContain("/interactors/psicquic/resources");
-    expect(result.content[0].text).toContain("IntAct");
-    expect(result.content[0].text).toContain("BioGRID");
+    
+    expect(calledUrl(fetchSpy.mock.calls)).toContain("/interactors/psicquic/resources");
+    expect(textOf(result)).toContain("IntAct");
+    expect(textOf(result)).toContain("BioGRID");
   });
 });

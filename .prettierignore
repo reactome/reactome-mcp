@@ -1,0 +1,17 @@
+# Build output and dependencies
+dist/
+coverage/
+node_modules/
+package-lock.json
+
+# Vendored Spec Kit assets -- upstream owns their formatting, and reformatting
+# them makes every `specify` upgrade a conflict.
+.specify/
+.claude/
+
+# Prose. Markdown reformatting churns documentation for no readability gain,
+# and the CHANGELOG is append-only by convention.
+*.md
+
+# The demo web page is hand-maintained and not part of the server build.
+web/

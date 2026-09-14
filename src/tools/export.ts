@@ -1,7 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { contentClient } from "../clients/content.js";
-import { analysisClient } from "../clients/analysis.js";
 import { CONTENT_SERVICE_URL, ANALYSIS_SERVICE_URL } from "../config.js";
 
 export function registerExportTools(server: McpServer) {

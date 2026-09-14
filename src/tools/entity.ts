@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { contentClient } from "../clients/content.js";
-import type { PhysicalEntity, Complex, ReferenceEntity, Event } from "../types/index.js";
+import type { PhysicalEntity, Complex, ReferenceEntity } from "../types/index.js";
 
 /**
  * `/data/participants/{id}` returns a *reduced* projection, not a full
@@ -90,10 +90,11 @@ function formatEntity(entity: EnhancedEntity): string {
     });
   }
 
-  if (entity.summation && entity.summation.length > 0) {
+  const summary = entity.summation?.[0]?.text;
+  if (summary) {
     lines.push("");
     lines.push("### Summary:");
-    lines.push(entity.summation[0].text);
+    lines.push(summary);
   }
 
   return lines.join("\n");

@@ -17,12 +17,19 @@
     "prepare": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.eslint.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
     "demo": "node web/mcp-bridge.js",
-    "demo:simple": "node web/server.js"
+    "demo:simple": "node web/server.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:coverage": "vitest run --coverage",
+    "sweep": "node scripts/sweep-live.mjs",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run build && npm test"
   },
   "keywords": [
     "mcp",
@@ -39,8 +46,14 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.70.0",
     "vitest": "^4.1.5"
   },
   "engines": {

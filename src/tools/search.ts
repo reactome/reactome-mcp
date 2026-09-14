@@ -58,12 +58,28 @@ function flattenSearchResults(result: SearchResult): { entries: SearchEntry[]; t
   const entries: SearchEntry[] = [];
   let totalCount = 0;
 
-  for (const group of result.results) {
+  for (const group of result.results ?? []) {
     totalCount += group.entriesCount;
     entries.push(...group.entries);
   }
 
   return { entries, totalCount };
+}
+
+/**
+ * `/search/diagram/{id}` does NOT return the grouped shape that
+ * `/search/query` does. Verified against the live Content Service:
+ *
+ *   GET /search/diagram/R-HSA-109581?query=TP53
+ *   {"entries": [{...}], "facets": [{"name": "Complex", "count": 4}], "found": 13}
+ *
+ * There is no `results` array to group over, so flattenSearchResults threw
+ * "result.results is not iterable" -- this tool had never returned an answer.
+ */
+interface DiagramSearchResult {
+  entries?: SearchEntry[];
+  facets?: FacetEntry[];
+  found?: number;
 }
 
 export function registerSearchTools(server: McpServer) {
@@ -328,19 +344,27 @@ export function registerSearchTools(server: McpServer) {
       include_interactors: z.boolean().optional().default(false).describe("Include interactors"),
     },
     async ({ diagram, query, include_interactors }) => {
-      const result = await contentClient.get<SearchResult>(`/search/diagram/${encodeURIComponent(diagram)}`, {
-        query,
-        includeInteractors: include_interactors,
-        rows: 50,
-      });
-      const { entries, totalCount } = flattenSearchResults(result);
+      const result = await contentClient.get<DiagramSearchResult>(
+        `/search/diagram/${encodeURIComponent(diagram)}`,
+        {
+          query,
+          includeInteractors: include_interactors,
+          rows: 50,
+        }
+      );
+      const entries = result.entries ?? [];
 
       const lines = [
         `## Search in Diagram ${diagram} for "${query}"`,
-        `**Found:** ${totalCount} results`,
+        `**Found:** ${result.found ?? entries.length} results`,
         "",
-        ...entries.map(formatSearchEntry),
       ];
+
+      if (entries.length > 0) {
+        lines.push(...entries.map(formatSearchEntry));
+      } else {
+        lines.push("*No matches in this diagram.*");
+      }
 
       return {
         content: [{ type: "text", text: lines.join("\n") }],

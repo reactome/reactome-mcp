@@ -1,0 +1,12 @@
+{
+  // Typechecking and linting cover more than the build does: tests and config
+  // files were in no project at all, so nothing checked them. The build
+  // tsconfig stays limited to src/ because it emits to dist/.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "tests/**/*", "*.config.ts"]
+}

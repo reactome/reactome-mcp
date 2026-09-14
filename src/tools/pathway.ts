@@ -32,8 +32,9 @@ function formatPathway(pathway: Pathway | Event): string {
     lines.push(`**Has diagram:** Yes`);
   }
 
-  if ("summation" in pathway && pathway.summation && pathway.summation.length > 0) {
-    lines.push("", "### Summary:", pathway.summation[0].text);
+  const summary = "summation" in pathway ? pathway.summation?.[0]?.text : undefined;
+  if (summary) {
+    lines.push("", "### Summary:", summary);
   }
 
   if ("literatureReference" in pathway && pathway.literatureReference && pathway.literatureReference.length > 0) {

@@ -74,5 +74,20 @@ export async function fetchWithRetry(
     }
   }
 
-  throw lastError ?? new Error(`${service} request failed after ${MAX_ATTEMPTS} attempts`);
+  // lastError is whatever fetch rejected with, which is not guaranteed to be
+  // an Error. Normalise so callers can always read `.message`.
+  const describe = (value: unknown): string => {
+    if (typeof value === "string") return value;
+    try {
+      return JSON.stringify(value) ?? Object.prototype.toString.call(value);
+    } catch {
+      return Object.prototype.toString.call(value);
+    }
+  };
+  if (lastError instanceof Error) throw lastError;
+  throw new Error(
+    lastError === undefined
+      ? `${service} request failed after ${MAX_ATTEMPTS} attempts`
+      : `${service} request failed after ${MAX_ATTEMPTS} attempts: ${describe(lastError)}`
+  );
 }

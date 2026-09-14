@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { fetchWithRetry } from "../src/clients/http.js";
 
 function mockResponse(status: number, body = "ok", headers: Record<string, string> = {}): Response {
@@ -6,7 +6,7 @@ function mockResponse(status: number, body = "ok", headers: Record<string, strin
 }
 
 describe("fetchWithRetry", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: MockInstance<typeof fetch>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -67,7 +67,7 @@ describe("fetchWithRetry", () => {
     fetchSpy.mockRejectedValue(new Error("ECONNREFUSED"));
     const promise = fetchWithRetry("https://example.test");
     // Swallow unhandled rejection before timers advance
-    const caught = promise.catch((e) => e);
+    const caught = promise.catch((e: unknown) => e);
     await vi.runAllTimersAsync();
     const err = await caught;
     expect(err).toBeInstanceOf(Error);

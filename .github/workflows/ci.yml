@@ -10,6 +10,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      # Keep going on the other versions when one fails: a Node-specific break
+      # is worth seeing in full, not one row at a time.
+      fail-fast: false
       matrix:
         node-version: [20.x, 22.x, 24.x]
     steps:
@@ -20,5 +23,24 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
-      - run: npm test
+      # The build was never run in CI, so nothing caught a broken emit until
+      # someone published.
+      - run: npm run build
+      - run: npm run test:coverage
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
+      # Advisory, not blocking: a new advisory against a transitive dev
+      # dependency should not stop an unrelated PR from merging. It should be
+      # visible in the run.
+      - run: npm audit --audit-level=high || true

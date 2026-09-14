@@ -33,6 +33,7 @@ function formatSpecies(result: AnalysisResult): string {
   if (!species || species.length === 0) return "unavailable";
   const ranked = [...species].sort((a, b) => b.pathways - a.pathways);
   const top = ranked[0];
+  if (!top) return "unavailable";
   const others = ranked.length - 1;
   return others > 0
     ? `${top.name} (${top.pathways} pathways, and ${others} other species)`

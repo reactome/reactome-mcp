@@ -1,0 +1,24 @@
+name: Live sweep
+
+# Calls every tool against the live Reactome services and reports output that
+# looks wrong. It is separate from CI because it needs the network and hits a
+# production service: a red run here can mean Reactome changed, not that this
+# repo did.
+on:
+  schedule:
+    # Mondays, 06:00 UTC -- early enough to see a weekend release change shapes.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run sweep

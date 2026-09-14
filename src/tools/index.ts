@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { contentClient } from "../clients/content.js";
-import type { Species, Disease, DatabaseInfo, Pathway, MappingResult } from "../types/index.js";
+import type { Species, Disease, Pathway } from "../types/index.js";
 
 import { registerAnalysisTools } from "./analysis.js";
 import { registerPathwayTools } from "./pathway.js";
