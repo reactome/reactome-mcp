@@ -15,6 +15,18 @@ All notable changes to this project are documented here. This project adheres to
 - `fetchWithRetry` rethrew `lastError`, typed `unknown`, so a non-`Error` rejection reached callers as something they could not read `.message` off.
 
 ### Added
+- **ReactomeGSA tools** — `reactome_gsa_methods`, `reactome_gsa_data_types`, `reactome_gsa_search_datasets`, `reactome_gsa_examples`, `reactome_gsa_sources`. Reactome has **two** analysis services and this server only knew about one:
+
+  | | | |
+  |---|---|---|
+  | `AnalysisService` | over-representation over a list of identifiers | already here |
+  | **ReactomeGSA** (`gsa.reactome.org`) | gene set analysis over an expression matrix — PADOG, Camera, ssGSEA, terapadog | new |
+
+  Camera is described by the service as *"a gene set analysis algorithm similar to the classical GSEA algorithm"*. The gap was found the hard way: a Reactome chatbot asked to "run a GSEA with my list of genes" replied that Reactome could not, and offered `fgsea` and a YouTube tutorial. It can — nothing here could reach the service that does it.
+
+  The tool descriptions carry the distinction that caused the confusion, since a description is all a model reads before choosing: gene set analysis needs an expression matrix with sample groups, so a user holding only a list of gene names wants over-representation, whatever they called it.
+
+  Submitting an analysis is deliberately absent. `POST /analysis` takes the whole expression matrix inline, which is neither something a chat user can paste nor something to push through a tool result. `reactome_gsa_search_datasets` covers the case that *is* reachable — Expression Atlas, Single Cell Expression Atlas, GREIN and GEO can be searched, so someone with no data of their own can still be pointed at a published dataset.
 - **Streamable HTTP transport**, alongside stdio. `MCP_HTTP_PORT=4320 node dist/http-server.js`. stdio remains the default and is untouched — every existing client is configured to spawn it. This is what a hosted instance needs, because a reverse proxy cannot front a process that talks over stdin/stdout.
 
   Each session gets its own server instance, built by the `createServer()` factory. Idle sessions are reaped (`MCP_SESSION_TTL_MS`, 30 min) and concurrency is capped (`MCP_MAX_SESSIONS`, 256), so a client that never sends `DELETE` cannot accumulate servers until the process dies.
