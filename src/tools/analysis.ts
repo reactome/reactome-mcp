@@ -20,12 +20,31 @@ function formatPathwaySummary(pathway: PathwaySummary): string {
   ].join("\n");
 }
 
+/**
+ * Species as reported by the Analysis Service.
+ *
+ * There is no species field on the summary -- the service returns a top-level
+ * `speciesSummary` array, one entry per species with a pathway count. The
+ * previous `summary.speciesName || summary.species` read two fields that do not
+ * exist and rendered "undefined".
+ */
+function formatSpecies(result: AnalysisResult): string {
+  const species = result.speciesSummary;
+  if (!species || species.length === 0) return "unavailable";
+  const ranked = [...species].sort((a, b) => b.pathways - a.pathways);
+  const top = ranked[0];
+  const others = ranked.length - 1;
+  return others > 0
+    ? `${top.name} (${top.pathways} pathways, and ${others} other species)`
+    : `${top.name} (${top.pathways} pathways)`;
+}
+
 function formatAnalysisResult(result: AnalysisResult): string {
   const lines = [
     `## Analysis Result`,
-    `**Token:** ${result.token}`,
+    `**Token:** ${result.summary.token ?? result.token ?? "unavailable"}`,
     `**Type:** ${result.summary.type}`,
-    `**Species:** ${result.summary.speciesName || result.summary.species}`,
+    `**Species:** ${formatSpecies(result)}`,
     `**Pathways found:** ${result.pathwaysFound}`,
     result.identifiersNotFound ? `**Identifiers not found:** ${result.identifiersNotFound}` : "",
     "",
