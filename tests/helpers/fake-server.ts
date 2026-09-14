@@ -22,7 +22,12 @@ export function createFakeServer() {
   const resources = new Map<string, CapturedResource>();
 
   const fake = {
-    tool(name: string, description: string, schema: Record<string, unknown>, handler: CapturedTool["handler"]) {
+    tool(
+      name: string,
+      description: string,
+      schema: Record<string, unknown>,
+      handler: CapturedTool["handler"]
+    ) {
       tools.set(name, { name, description, schema, handler });
     },
     resource(name: string, uri: string, handler: CapturedResource["handler"]) {
@@ -82,7 +87,7 @@ export function textOf(result: { content: Array<{ type: string; text: string }> 
 
 /** The first fetch call's URL, for asserting on the endpoint a tool called. */
 export function calledUrl(
-  calls: Array<[input: string | URL | Request, init?: RequestInit]> ,
+  calls: Array<[input: string | URL | Request, init?: RequestInit]>,
   index = 0
 ): string {
   const call = calls[index];

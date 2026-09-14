@@ -1,14 +1,9 @@
 import { describe, it, expect } from "vitest";
-import {
-  rejectWriteThroughCalls,
-  WriteThroughRejected,
-} from "../src/tools/cypher-guard.js";
+import { rejectWriteThroughCalls, WriteThroughRejected } from "../src/tools/cypher-guard.js";
 
 describe("rejectWriteThroughCalls", () => {
   it("accepts a plain read query", () => {
-    expect(() =>
-      rejectWriteThroughCalls("MATCH (n:Pathway) RETURN n LIMIT 10")
-    ).not.toThrow();
+    expect(() => rejectWriteThroughCalls("MATCH (n:Pathway) RETURN n LIMIT 10")).not.toThrow();
   });
 
   it("accepts queries that mention apoc in a string literal if no procedure call", () => {
@@ -26,9 +21,9 @@ describe("rejectWriteThroughCalls", () => {
   });
 
   it("rejects apoc.cypher.doIt regardless of case", () => {
-    expect(() =>
-      rejectWriteThroughCalls("CALL APOC.CYPHER.DOIT('CREATE (n)', {})")
-    ).toThrow(WriteThroughRejected);
+    expect(() => rejectWriteThroughCalls("CALL APOC.CYPHER.DOIT('CREATE (n)', {})")).toThrow(
+      WriteThroughRejected
+    );
   });
 
   it("rejects apoc.periodic.iterate", () => {
@@ -46,9 +41,9 @@ describe("rejectWriteThroughCalls", () => {
   });
 
   it("rejects apoc.refactor.mergeNodes", () => {
-    expect(() =>
-      rejectWriteThroughCalls("CALL apoc.refactor.mergeNodes([n1, n2])")
-    ).toThrow(WriteThroughRejected);
+    expect(() => rejectWriteThroughCalls("CALL apoc.refactor.mergeNodes([n1, n2])")).toThrow(
+      WriteThroughRejected
+    );
   });
 
   it("rejects apoc.load.json (SSRF risk)", () => {
@@ -60,30 +55,26 @@ describe("rejectWriteThroughCalls", () => {
   });
 
   it("rejects apoc.export.csv.all", () => {
-    expect(() =>
-      rejectWriteThroughCalls("CALL apoc.export.csv.all('/tmp/x.csv', {})")
-    ).toThrow(WriteThroughRejected);
+    expect(() => rejectWriteThroughCalls("CALL apoc.export.csv.all('/tmp/x.csv', {})")).toThrow(
+      WriteThroughRejected
+    );
   });
 
   it("rejects apoc.nodes.delete", () => {
-    expect(() =>
-      rejectWriteThroughCalls("CALL apoc.nodes.delete([1,2,3], 100)")
-    ).toThrow(WriteThroughRejected);
+    expect(() => rejectWriteThroughCalls("CALL apoc.nodes.delete([1,2,3], 100)")).toThrow(
+      WriteThroughRejected
+    );
   });
 
   it("strips line comments so commented-out bad calls are ignored", () => {
     expect(() =>
-      rejectWriteThroughCalls(
-        "// CALL apoc.cypher.runWrite('...')\nMATCH (n) RETURN n"
-      )
+      rejectWriteThroughCalls("// CALL apoc.cypher.runWrite('...')\nMATCH (n) RETURN n")
     ).not.toThrow();
   });
 
   it("does not strip comments when the bad call is in active code", () => {
     expect(() =>
-      rejectWriteThroughCalls(
-        "// harmless comment\nCALL apoc.periodic.commit('DELETE n', {})"
-      )
+      rejectWriteThroughCalls("// harmless comment\nCALL apoc.periodic.commit('DELETE n', {})")
     ).toThrow(WriteThroughRejected);
   });
 

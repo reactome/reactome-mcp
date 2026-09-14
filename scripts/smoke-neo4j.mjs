@@ -20,7 +20,9 @@ async function main() {
   console.log(`  first 5 labels: ${schema.labels.slice(0, 5).join(", ")}`);
 
   console.log("[smoke] database info query…");
-  const info = await runRead("CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition");
+  const info = await runRead(
+    "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition"
+  );
   console.log("  components:", JSON.stringify(info));
 
   console.log("[smoke] sampling Pathway nodes…");
@@ -39,7 +41,7 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error("[smoke] FAILED:", err);
   process.exit(1);
 });

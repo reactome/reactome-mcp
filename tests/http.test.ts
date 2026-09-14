@@ -33,9 +33,7 @@ describe("fetchWithRetry", () => {
   });
 
   it("retries on 503 and succeeds on the second attempt", async () => {
-    fetchSpy
-      .mockResolvedValueOnce(mockResponse(503))
-      .mockResolvedValueOnce(mockResponse(200));
+    fetchSpy.mockResolvedValueOnce(mockResponse(503)).mockResolvedValueOnce(mockResponse(200));
     const promise = fetchWithRetry("https://example.test");
     await vi.runAllTimersAsync();
     const res = await promise;

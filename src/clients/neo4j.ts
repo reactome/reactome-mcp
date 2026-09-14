@@ -37,17 +37,13 @@ function warnIfInsecureRemote() {
 
 export function getDriver(): Driver {
   if (!NEO4J_URI) {
-    throw new Error(
-      "Neo4j is not configured. Set NEO4J_URI to enable Cypher tools."
-    );
+    throw new Error("Neo4j is not configured. Set NEO4J_URI to enable Cypher tools.");
   }
   if (!driverInstance) {
     warnIfInsecureRemote();
-    driverInstance = neo4j.driver(
-      NEO4J_URI,
-      neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD),
-      { disableLosslessIntegers: true }
-    );
+    driverInstance = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD), {
+      disableLosslessIntegers: true,
+    });
     logger.info("neo4j driver initialized", {
       uri: NEO4J_URI,
       database: NEO4J_DATABASE,
@@ -111,7 +107,7 @@ export async function runRead<T = Record<string, unknown>>(
     // is terminated if it runs longer than this. Guards against runaway
     // queries on a large graph.
     const result = await session.run(cypher, coerceIntParams(params), { timeout });
-    return result.records.map((r) => r.toObject() as T);
+    return result.records.map(r => r.toObject() as T);
   } finally {
     await session.close();
   }

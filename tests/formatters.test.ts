@@ -99,9 +99,7 @@ describe("response shape regressions", () => {
   });
 
   it("reactome_entity_component_of falls back when names are absent", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse([{ type: "hasComponent", stIds: ["R-HSA-1"] }])
-    );
+    fetchSpy.mockResolvedValueOnce(jsonResponse([{ type: "hasComponent", stIds: ["R-HSA-1"] }]));
 
     const text = textOf(await fake.invoke("reactome_entity_component_of", { id: "R-HSA-1" }));
     expect(text).toContain("(R-HSA-1) [hasComponent]");
@@ -117,8 +115,18 @@ describe("response shape regressions", () => {
           peDbId: 140976,
           schemaClass: "Complex",
           refEntities: [
-            { dbId: 1, identifier: "Q12933", displayName: "TRAF2", schemaClass: "ReferenceGeneProduct" },
-            { dbId: 2, identifier: "Q15628", displayName: "TRADD", schemaClass: "ReferenceGeneProduct" },
+            {
+              dbId: 1,
+              identifier: "Q12933",
+              displayName: "TRAF2",
+              schemaClass: "ReferenceGeneProduct",
+            },
+            {
+              dbId: 2,
+              identifier: "Q15628",
+              displayName: "TRADD",
+              schemaClass: "ReferenceGeneProduct",
+            },
           ],
         },
       ])
@@ -206,7 +214,10 @@ describe("response shape regressions", () => {
 
   it("reactome_static_interactors survives an interactor with no score", async () => {
     fetchSpy.mockResolvedValueOnce(
-      jsonResponse({ resource: "static", entities: [{ acc: "P04637", count: 1, interactors: [{ acc: "Q00987" }] }] })
+      jsonResponse({
+        resource: "static",
+        entities: [{ acc: "P04637", count: 1, interactors: [{ acc: "Q00987" }] }],
+      })
     );
 
     const text = textOf(await fake.invoke("reactome_static_interactors", { accession: "P04637" }));
@@ -239,7 +250,9 @@ describe("response shape regressions", () => {
   it("reactome_psicquic_details uses the same envelope as the static endpoint", async () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse({ ...interactorEnvelope, resource: "IntAct" }));
 
-    const text = textOf(await fake.invoke("reactome_psicquic_details", { resource: "IntAct", accession: "P04637" }));
+    const text = textOf(
+      await fake.invoke("reactome_psicquic_details", { resource: "IntAct", accession: "P04637" })
+    );
 
     expect(text).toContain("**Interactors found:** 2");
     expect(text).toContain("**Q00987** (score: 0.995) - MDM2");
@@ -251,7 +264,9 @@ describe("response shape regressions", () => {
       jsonResponse({ resource: "IntAct", entities: [{ acc: "P04637", count: 144 }] })
     );
 
-    const text = textOf(await fake.invoke("reactome_psicquic_summary", { resource: "IntAct", accession: "P04637" }));
+    const text = textOf(
+      await fake.invoke("reactome_psicquic_summary", { resource: "IntAct", accession: "P04637" })
+    );
 
     expect(text).toContain("**Protein:** P04637");
     expect(text).toContain("**Interaction count:** 144");
@@ -270,7 +285,12 @@ describe("response shape regressions", () => {
       })
     );
 
-    const text = textOf(await fake.invoke("reactome_analysis_found_entities", { token: "tok", pathway: "R-HSA-109581" }));
+    const text = textOf(
+      await fake.invoke("reactome_analysis_found_entities", {
+        token: "tok",
+        pathway: "R-HSA-109581",
+      })
+    );
 
     // A mapsTo entry has `ids` (plural); there is no singular `identifier`.
     expect(text).toContain("- TP53 -> P04637 (UNIPROT)");

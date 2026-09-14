@@ -139,7 +139,6 @@ export interface FilteredResult {
   pathwaysFiltered: number;
 }
 
-
 export interface SpeciesSummary {
   dbId: number;
   taxId: string;

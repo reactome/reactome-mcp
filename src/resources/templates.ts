@@ -13,13 +13,17 @@ export function registerResourceTemplates(server: McpServer) {
     { description: "Pathway details by Reactome ID (e.g., R-HSA-109582)" },
     async (uri: URL, variables: Variables) => {
       const id = variables.id as string;
-      const pathway = await contentClient.get<Event>(`/data/query/enhanced/${encodeURIComponent(id)}`);
+      const pathway = await contentClient.get<Event>(
+        `/data/query/enhanced/${encodeURIComponent(id)}`
+      );
       return {
-        contents: [{
-          uri: uri.href,
-          mimeType: "application/json",
-          text: JSON.stringify(pathway, null, 2),
-        }],
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(pathway, null, 2),
+          },
+        ],
       };
     }
   );
@@ -40,19 +44,23 @@ export function registerResourceTemplates(server: McpServer) {
         }
         const svg = await response.text();
         return {
-          contents: [{
-            uri: uri.href,
-            mimeType: "image/svg+xml",
-            text: svg,
-          }],
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: "image/svg+xml",
+              text: svg,
+            },
+          ],
         };
       } catch (error) {
         return {
-          contents: [{
-            uri: uri.href,
-            mimeType: "text/plain",
-            text: `Error fetching diagram: ${error instanceof Error ? error.message : String(error)}\nDirect URL: ${svgUrl}`,
-          }],
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: "text/plain",
+              text: `Error fetching diagram: ${error instanceof Error ? error.message : String(error)}\nDirect URL: ${svgUrl}`,
+            },
+          ],
         };
       }
     }
@@ -65,13 +73,17 @@ export function registerResourceTemplates(server: McpServer) {
     { description: "Entity details by Reactome ID" },
     async (uri: URL, variables: Variables) => {
       const id = variables.id as string;
-      const entity = await contentClient.get<Record<string, unknown>>(`/data/query/enhanced/${encodeURIComponent(id)}`);
+      const entity = await contentClient.get<Record<string, unknown>>(
+        `/data/query/enhanced/${encodeURIComponent(id)}`
+      );
       return {
-        contents: [{
-          uri: uri.href,
-          mimeType: "application/json",
-          text: JSON.stringify(entity, null, 2),
-        }],
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(entity, null, 2),
+          },
+        ],
       };
     }
   );
@@ -89,11 +101,13 @@ export function registerResourceTemplates(server: McpServer) {
         order: "ASC",
       });
       return {
-        contents: [{
-          uri: uri.href,
-          mimeType: "application/json",
-          text: JSON.stringify(result, null, 2),
-        }],
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
       };
     }
   );
@@ -105,13 +119,17 @@ export function registerResourceTemplates(server: McpServer) {
     { description: "Top-level pathways for a species" },
     async (uri: URL, variables: Variables) => {
       const species = variables.species as string;
-      const pathways = await contentClient.get<Pathway[]>(`/data/pathways/top/${encodeURIComponent(species)}`);
+      const pathways = await contentClient.get<Pathway[]>(
+        `/data/pathways/top/${encodeURIComponent(species)}`
+      );
       return {
-        contents: [{
-          uri: uri.href,
-          mimeType: "application/json",
-          text: JSON.stringify(pathways, null, 2),
-        }],
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(pathways, null, 2),
+          },
+        ],
       };
     }
   );
@@ -123,13 +141,17 @@ export function registerResourceTemplates(server: McpServer) {
     { description: "Full events hierarchy for a species" },
     async (uri: URL, variables: Variables) => {
       const species = variables.species as string;
-      const hierarchy = await contentClient.get<unknown>(`/data/eventsHierarchy/${encodeURIComponent(species)}`);
+      const hierarchy = await contentClient.get<unknown>(
+        `/data/eventsHierarchy/${encodeURIComponent(species)}`
+      );
       return {
-        contents: [{
-          uri: uri.href,
-          mimeType: "application/json",
-          text: JSON.stringify(hierarchy, null, 2),
-        }],
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(hierarchy, null, 2),
+          },
+        ],
       };
     }
   );

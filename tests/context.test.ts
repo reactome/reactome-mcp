@@ -54,14 +54,14 @@ describe("request context", () => {
     async function runUnderContext(name: string) {
       return withNewRequestContext(async () => {
         // Simulate async work that could race with the other context
-        await new Promise((r) => setTimeout(r, 10));
+        await new Promise(r => setTimeout(r, 10));
         seen.push({ name, id: currentReqId() });
       });
     }
 
     await Promise.all([runUnderContext("a"), runUnderContext("b")]);
-    const aId = seen.find((s) => s.name === "a")?.id;
-    const bId = seen.find((s) => s.name === "b")?.id;
+    const aId = seen.find(s => s.name === "a")?.id;
+    const bId = seen.find(s => s.name === "b")?.id;
     expect(aId).toBeDefined();
     expect(bId).toBeDefined();
     expect(aId).not.toBe(bId);

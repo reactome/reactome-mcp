@@ -58,43 +58,44 @@ export async function fetchGraphSchema(): Promise<GraphSchema> {
       type NodeProp = GraphSchema["nodeTypeProperties"][number];
       type RelProp = GraphSchema["relTypeProperties"][number];
 
-      const [components, stats, schemaRow, nodeProps, relProps, indexes, constraints] = await Promise.all([
-        runRead<Comp>(
-          "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition",
-          {},
-          opts
-        ),
-        runRead<Stats>(
-          "CALL apoc.meta.stats() YIELD labels, relTypes, relTypesCount, nodeCount, relCount RETURN labels, relTypes, relTypesCount, nodeCount, relCount",
-          {},
-          opts
-        ),
-        runRead<{ value: Record<string, unknown> }>(
-          "CALL apoc.meta.schema() YIELD value RETURN value",
-          {},
-          opts
-        ),
-        runRead<NodeProp>(
-          "CALL apoc.meta.nodeTypeProperties() YIELD nodeType, nodeLabels, propertyName, propertyTypes, mandatory RETURN nodeType, nodeLabels, propertyName, propertyTypes, mandatory",
-          {},
-          opts
-        ),
-        runRead<RelProp>(
-          "CALL apoc.meta.relTypeProperties() YIELD relType, sourceNodeLabels, targetNodeLabels, propertyName, propertyTypes, mandatory RETURN relType, sourceNodeLabels, targetNodeLabels, propertyName, propertyTypes, mandatory",
-          {},
-          opts
-        ).catch(() => [] as RelProp[]),
-        runRead<unknown>(
-          "CALL db.indexes() YIELD name, state, type, entityType, labelsOrTypes, properties RETURN name, state, type, entityType, labelsOrTypes, properties",
-          {},
-          opts
-        ).catch(() => [] as unknown[]),
-        runRead<unknown>(
-          "CALL db.constraints() YIELD name, description RETURN name, description",
-          {},
-          opts
-        ).catch(() => [] as unknown[]),
-      ]);
+      const [components, stats, schemaRow, nodeProps, relProps, indexes, constraints] =
+        await Promise.all([
+          runRead<Comp>(
+            "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition",
+            {},
+            opts
+          ),
+          runRead<Stats>(
+            "CALL apoc.meta.stats() YIELD labels, relTypes, relTypesCount, nodeCount, relCount RETURN labels, relTypes, relTypesCount, nodeCount, relCount",
+            {},
+            opts
+          ),
+          runRead<{ value: Record<string, unknown> }>(
+            "CALL apoc.meta.schema() YIELD value RETURN value",
+            {},
+            opts
+          ),
+          runRead<NodeProp>(
+            "CALL apoc.meta.nodeTypeProperties() YIELD nodeType, nodeLabels, propertyName, propertyTypes, mandatory RETURN nodeType, nodeLabels, propertyName, propertyTypes, mandatory",
+            {},
+            opts
+          ),
+          runRead<RelProp>(
+            "CALL apoc.meta.relTypeProperties() YIELD relType, sourceNodeLabels, targetNodeLabels, propertyName, propertyTypes, mandatory RETURN relType, sourceNodeLabels, targetNodeLabels, propertyName, propertyTypes, mandatory",
+            {},
+            opts
+          ).catch(() => [] as RelProp[]),
+          runRead<unknown>(
+            "CALL db.indexes() YIELD name, state, type, entityType, labelsOrTypes, properties RETURN name, state, type, entityType, labelsOrTypes, properties",
+            {},
+            opts
+          ).catch(() => [] as unknown[]),
+          runRead<unknown>(
+            "CALL db.constraints() YIELD name, description RETURN name, description",
+            {},
+            opts
+          ).catch(() => [] as unknown[]),
+        ]);
 
       const result: GraphSchema = {
         fetchedAt: new Date().toISOString(),

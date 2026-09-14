@@ -10,8 +10,16 @@ export function registerExportTools(server: McpServer) {
     "Export a pathway diagram as an image. Returns the URL to download the diagram.",
     {
       id: z.string().max(2048).describe("Pathway stable ID (e.g., R-HSA-109582)"),
-      format: z.enum(["png", "jpg", "svg", "gif"]).optional().default("svg").describe("Image format"),
-      quality: z.number().optional().default(5).describe("Quality/scale factor (1-10, higher = larger image)"),
+      format: z
+        .enum(["png", "jpg", "svg", "gif"])
+        .optional()
+        .default("svg")
+        .describe("Image format"),
+      quality: z
+        .number()
+        .optional()
+        .default(5)
+        .describe("Quality/scale factor (1-10, higher = larger image)"),
       flag: z.string().max(2048).optional().describe("Identifier to highlight/flag in the diagram"),
       sel: z.array(z.string().max(2048)).optional().describe("IDs to select/highlight"),
     },
@@ -50,7 +58,11 @@ export function registerExportTools(server: McpServer) {
     "Export a reaction diagram as an image.",
     {
       id: z.string().max(2048).describe("Reaction stable ID"),
-      format: z.enum(["png", "jpg", "svg", "gif"]).optional().default("svg").describe("Image format"),
+      format: z
+        .enum(["png", "jpg", "svg", "gif"])
+        .optional()
+        .default("svg")
+        .describe("Image format"),
       quality: z.number().optional().default(5).describe("Quality/scale factor"),
     },
     async ({ id, format, quality }) => {
@@ -77,7 +89,11 @@ export function registerExportTools(server: McpServer) {
     "Export the pathway overview (fireworks) diagram for a species.",
     {
       species: z.string().max(2048).optional().default("Homo sapiens").describe("Species name"),
-      format: z.enum(["png", "jpg", "svg", "gif"]).optional().default("svg").describe("Image format"),
+      format: z
+        .enum(["png", "jpg", "svg", "gif"])
+        .optional()
+        .default("svg")
+        .describe("Image format"),
     },
     async ({ species, format }) => {
       // Species needs to be formatted as URL-safe string
@@ -115,18 +131,14 @@ export function registerExportTools(server: McpServer) {
         const truncated = sbgn.length > maxLength;
         const content = truncated ? sbgn.substring(0, maxLength) + "\n... (truncated)" : sbgn;
 
-        const lines = [
-          `## SBGN Export for ${id}`,
-          "",
-          "```xml",
-          content,
-          "```",
-        ];
+        const lines = [`## SBGN Export for ${id}`, "", "```xml", content, "```"];
 
         if (truncated) {
           lines.push("");
           lines.push(`*Output truncated. Full SBGN is ${sbgn.length} characters.*`);
-          lines.push(`*Download full file: ${CONTENT_SERVICE_URL}/exporter/event/${encodeURIComponent(id)}.sbgn*`);
+          lines.push(
+            `*Download full file: ${CONTENT_SERVICE_URL}/exporter/event/${encodeURIComponent(id)}.sbgn*`
+          );
         }
 
         return {
@@ -134,10 +146,12 @@ export function registerExportTools(server: McpServer) {
         };
       } catch (error) {
         return {
-          content: [{
-            type: "text",
-            text: `Error exporting SBGN: ${error instanceof Error ? error.message : String(error)}\n\nDirect download URL: ${CONTENT_SERVICE_URL}/exporter/event/${encodeURIComponent(id)}.sbgn`
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Error exporting SBGN: ${error instanceof Error ? error.message : String(error)}\n\nDirect download URL: ${CONTENT_SERVICE_URL}/exporter/event/${encodeURIComponent(id)}.sbgn`,
+            },
+          ],
         };
       }
     }
@@ -199,7 +213,12 @@ export function registerExportTools(server: McpServer) {
     "Generate a PDF report for an analysis result.",
     {
       token: z.string().max(2048).describe("Analysis token"),
-      species: z.string().max(2048).optional().default("Homo sapiens").describe("Species for the report"),
+      species: z
+        .string()
+        .max(2048)
+        .optional()
+        .default("Homo sapiens")
+        .describe("Species for the report"),
       num_pathways: z.number().optional().default(25).describe("Number of top pathways to include"),
       resource: z.string().max(2048).optional().default("TOTAL").describe("Resource filter"),
     },
@@ -230,7 +249,12 @@ export function registerExportTools(server: McpServer) {
     {
       token: z.string().max(2048).describe("Analysis token"),
       type: z.enum(["pathways", "found_entities", "not_found"]).describe("Type of data to export"),
-      resource: z.string().max(2048).optional().default("TOTAL").describe("Resource filter (for pathways and found_entities)"),
+      resource: z
+        .string()
+        .max(2048)
+        .optional()
+        .default("TOTAL")
+        .describe("Resource filter (for pathways and found_entities)"),
     },
     async ({ token, type, resource }) => {
       let url: string;

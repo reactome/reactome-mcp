@@ -75,7 +75,9 @@ export function registerInteractorTools(server: McpServer) {
     "List available PSICQUIC registry services for protein-protein interaction data.",
     {},
     async () => {
-      const resources = await contentClient.get<PsicquicResource[]>("/interactors/psicquic/resources");
+      const resources = await contentClient.get<PsicquicResource[]>(
+        "/interactors/psicquic/resources"
+      );
 
       const active = resources.filter(r => r.active);
       const inactive = resources.filter(r => !r.active);
@@ -105,7 +107,10 @@ export function registerInteractorTools(server: McpServer) {
     "reactome_psicquic_summary",
     "Get a summary of protein-protein interactions from a PSICQUIC resource.",
     {
-      resource: z.string().max(2048).describe("PSICQUIC resource name (e.g., 'IntAct', 'MINT', 'BioGRID')"),
+      resource: z
+        .string()
+        .max(2048)
+        .describe("PSICQUIC resource name (e.g., 'IntAct', 'MINT', 'BioGRID')"),
       accession: z.string().max(2048).describe("Protein accession (e.g., UniProt ID)"),
     },
     async ({ resource, accession }) => {
@@ -150,7 +155,10 @@ export function registerInteractorTools(server: McpServer) {
       ];
 
       if (interactors.length > 0) {
-        lines.push("### Interacting Proteins (sorted by score):", ...formatInteractors(interactors));
+        lines.push(
+          "### Interacting Proteins (sorted by score):",
+          ...formatInteractors(interactors)
+        );
       } else {
         lines.push(`*No interactions found in ${resource}.*`);
       }
