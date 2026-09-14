@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Ten tools read field paths the Reactome services never return.** Each called the right endpoint and reported success, so nothing flagged them: `contentClient.get<T>` asserts `T`, it does not verify it, and 51 of 56 tools had no test. `search_suggest` and `search_spellcheck` expected `{suggestions: []}` where the API returns a bare array; `entity_component_of` expected `Complex` objects where the API returns one entry per relationship type with parallel `names`/`stIds`/`schemaClasses` arrays; `participants` expected `stId` where the API returns `peDbId`; the four interactor tools read `score` one level above where it lives, throwing on `.toFixed`; `analysis_found_entities` read `mapsTo[].identifier` where the API returns `ids[]`. **`search_diagram` had never returned an answer** — it shared the grouped-results helper, but that endpoint returns a flat `entries` array, so every call threw `result.results is not iterable`.
+- **Two tools dropped data silently, with no `undefined` to give it away.** `participants` never rendered external identifiers at all — the endpoint returns `refEntities` (an array), never a singular `referenceEntity`, so UniProt accessions were simply absent. `search_facets` returned nothing but its heading: each facet is an object with an `available` list, so `.length` on it was `undefined` and every section was skipped as falsy.
+- **`events_hierarchy` failed every call that did not name a species.** Its default was `"Homo sapiens"`, which that endpoint answers with HTTP 500; `"9606"` returns 200.
+- A failed Neo4j driver close rejected with nobody listening — `process.once` was handed an `async` function.
+- `fetchWithRetry` rethrew `lastError`, typed `unknown`, so a non-`Error` rejection reached callers as something they could not read `.message` off.
+
+### Added
+- **Spec Kit.** `.specify/` with a constitution written from failures this repository actually had, and `specs/` for design decisions. Spec 001 records what was found about response shapes; spec 002 states the transport and hosting question rather than answering it. The Spec Kit skills under `.claude/skills/` are tracked deliberately — people clone this repository and point an agent at it.
+- **A live sweep.** `npm run sweep` calls all 53 tools against the live services. It checks for `undefined`, `[object Object]` and empty bodies, and — because marker-grepping cannot see a field that was dropped cleanly — asserts expected content for 16 tools whose arguments are known to return data. Runs weekly and on demand, not in CI, since a red run there can mean Reactome changed rather than this repository did.
+- **ESLint with type-aware rules, and Prettier.** Plus coverage reporting with a ratchet threshold, and a `tsconfig.eslint.json` that finally includes `tests/` — which had been in no TypeScript project at all.
+- **`createServer()`** (`src/server.ts`) builds a fully-registered server with no transport attached, so construction no longer happens at module scope and a hosted deployment can serve a second transport per session. **Harvested from #5 by [@adidev001](https://github.com/adidev001).**
+- **`nonEmptyString`** (`src/schemas.ts`), shared by 83 argument schemas. Blank and whitespace-only arguments are rejected at the schema instead of reaching the service as a confusing 404 or a request for everything. Keeps the 2048-character cap added in 1.3.0. **Also from #5 by [@adidev001](https://github.com/adidev001).**
+
+### Changed
+- **zod 4**, **neo4j-driver 6**, **vitest 5**, **@types/node 26**. `z.record(v)` now requires an explicit key type; that was the only breaking change reaching this code.
+- CI now runs lint, format check, typecheck, **build** and coverage. The build had never run in CI.
+- Test suite: 41 → 64 tests.
+
+- **TypeScript 5.9 → 7**, via the side-by-side arrangement the TypeScript team documents. The build and typecheck run TypeScript 7 (installed as the alias `typescript-7`); the package named `typescript` stays at 6.0.3 because that is the newest typescript-eslint supports. Builds go from ~2.6s to ~0.38s, and `npm run check` typechecks with both compilers so they cannot diverge silently. TypeScript 6 stopped auto-including `@types/*`, so `tsconfig.json` now names `"types": ["node"]` — the lint config already did.
+
+  Scripts invoke the compiler **by path** rather than calling `tsc`: both packages ship a `tsc` binary, and `node_modules/.bin/tsc` was observed pointing at 7.0.2 after an incremental install and 6.0.3 after a clean `npm ci` on the same tree. A bare `tsc` would compile with a different compiler depending on how the tree was installed.
+
+### Held
+- **Moving the `typescript` package itself to 7.** typescript-eslint throws on TS >= 7, so bumping it would disable linting while changing nothing about the build, which already uses 7. Tracked in #29; dependabot ignores TypeScript major bumps until it closes, at which point the alias goes away.
+
 ## [1.4.0] — 2026-04-24
 
 ### Changed

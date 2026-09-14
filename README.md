@@ -262,10 +262,40 @@ Only registered when `NEO4J_URI` is set. Designed for curators running the [`rea
 ## Development
 
 ```bash
+npm run check     # lint, format, typecheck (both compilers), build, test
 npm run dev       # watch mode — recompiles on changes
+npm test          # unit tests
+npm run sweep     # call all 53 tools against the live Reactome services
 npm run inspect   # interactive MCP Inspector
 npm run demo      # web demo with MCP bridge
 ```
+
+`npm run sweep` needs the network and hits production Reactome. It is not part
+of `npm test`; run it before a release and after touching any formatter. Unit
+tests pin shapes we already know about — only the sweep finds a tool that has
+never worked.
+
+### Two TypeScript versions, on purpose
+
+The build and typecheck run **TypeScript 7**; the package named `typescript` is
+pinned to **6.0.3** because that is what typescript-eslint supports
+([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)).
+TypeScript 7 is installed under the alias `typescript-7`. This is the
+[side-by-side arrangement](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0)
+the TypeScript team documents.
+
+**Scripts name the compiler by path rather than calling `tsc`.** Both packages
+ship a `tsc` binary, so `node_modules/.bin/tsc` points at whichever npm linked
+last — observed as 7.0.2 after an incremental install and 6.0.3 after a clean
+`npm ci` on the same tree. A bare `tsc` would silently compile with a different
+compiler depending on how the tree was installed.
+
+`npm run check` typechecks with **both**, so a disagreement between them shows
+up as a failed check rather than as lint and build quietly diverging.
+
+When typescript-eslint supports TypeScript 7, drop the alias, move `typescript`
+to 7, and point the scripts back at `tsc`. Tracked in
+[#29](https://github.com/reactome/reactome-mcp/issues/29).
 
 ## License
 

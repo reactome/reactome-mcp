@@ -13,11 +13,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "node node_modules/typescript-7/bin/tsc",
     "prepare": "npm run build",
     "start": "node dist/index.js",
-    "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit -p tsconfig.eslint.json",
+    "dev": "node node_modules/typescript-7/bin/tsc --watch",
+    "typecheck": "node node_modules/typescript-7/bin/tsc --noEmit -p tsconfig.eslint.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
@@ -29,7 +29,8 @@
     "format:check": "prettier --check .",
     "test:coverage": "vitest run --coverage",
     "sweep": "node scripts/sweep-live.mjs",
-    "check": "npm run lint && npm run format:check && npm run typecheck && npm run build && npm test"
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run typecheck:lint-compiler && npm run build && npm test",
+    "typecheck:lint-compiler": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.eslint.json"
   },
   "keywords": [
     "mcp",
@@ -52,7 +53,8 @@
     "eslint": "^10.10.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.6",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
+    "typescript-7": "npm:typescript@^7.0.2",
     "typescript-eslint": "^8.70.0",
     "vitest": "^5.0.0"
   },
