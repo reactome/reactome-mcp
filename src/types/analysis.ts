@@ -88,9 +88,17 @@ export interface FoundEntity {
   exp?: number[];
 }
 
+/**
+ * A mapsTo entry groups the resource identifiers one submitted id resolved to.
+ * Verified against the live Analysis Service:
+ *
+ *   GET /token/{token}/found/all/{pathway}
+ *   {"id": "TP53", "exp": [], "mapsTo": [{"resource": "UNIPROT", "ids": ["P04637"]}]}
+ *
+ * There is no singular `identifier` -- reading it rendered "TP53 -> undefined".
+ */
 export interface MappedEntity {
   resource: string;
-  identifier: string;
   ids: string[];
 }
 

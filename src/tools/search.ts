@@ -3,13 +3,21 @@ import { z } from "zod";
 import { contentClient } from "../clients/content.js";
 import type { SearchResult, SearchEntry, FacetEntry } from "../types/index.js";
 
-interface SpellcheckResult {
-  suggestions: string[];
-}
+/**
+ * `/search/spellcheck` and `/search/suggest` return a BARE JSON array of
+ * strings -- not an object with a `suggestions` field. Verified against the
+ * live Content Service:
+ *
+ *   GET /search/suggest?query=TP53
+ *   ["tp53:banp","tp53aip1","tp53b_human", ...]
+ *
+ * The previous `{ suggestions: string[] }` shape meant `result.suggestions` was
+ * always undefined: suggest crashed on `.map`, and spellcheck -- which guarded
+ * the access -- silently reported "no suggestions" for every input.
+ */
+type SpellcheckResult = string[];
 
-interface SuggestResult {
-  suggestions: string[];
-}
+type SuggestResult = string[];
 
 interface PathwaySearchResult {
   dbId: number;
@@ -162,14 +170,15 @@ export function registerSearchTools(server: McpServer) {
     },
     async ({ query }) => {
       const result = await contentClient.get<SuggestResult>("/search/suggest", { query });
+      const suggestions = Array.isArray(result) ? result : [];
 
       const lines = [
         `## Suggestions for "${query}"`,
         "",
-        ...result.suggestions.map(s => `- ${s}`),
+        ...suggestions.map(s => `- ${s}`),
       ];
 
-      if (result.suggestions.length === 0) {
+      if (suggestions.length === 0) {
         lines.push("*No suggestions found*");
       }
 
@@ -188,15 +197,16 @@ export function registerSearchTools(server: McpServer) {
     },
     async ({ query }) => {
       const result = await contentClient.get<SpellcheckResult>("/search/spellcheck", { query });
+      const suggestions = Array.isArray(result) ? result : [];
 
       const lines = [
         `## Spellcheck for "${query}"`,
         "",
       ];
 
-      if (result.suggestions && result.suggestions.length > 0) {
+      if (suggestions.length > 0) {
         lines.push("**Did you mean:**");
-        lines.push(...result.suggestions.map(s => `- ${s}`));
+        lines.push(...suggestions.map(s => `- ${s}`));
       } else {
         lines.push("*No spelling suggestions*");
       }
@@ -215,11 +225,29 @@ export function registerSearchTools(server: McpServer) {
       query: z.string().max(2048).optional().describe("Search term (optional, returns global facets if omitted)"),
     },
     async ({ query }) => {
+      /**
+       * Each facet is an OBJECT with an `available` list, not a bare array.
+       * Verified against the live Content Service:
+       *
+       *   GET /search/facet
+       *   {"totalNumFount": 388394,
+       *    "typeFacet": {"available": [{"name": "Complex", "count": 111374}]}}
+       *
+       * Treating them as arrays meant `.length` was undefined, every section
+       * was skipped as falsy, and the tool returned nothing but its heading --
+       * successfully, so nothing ever flagged it.
+       */
+      interface Facet {
+        available?: FacetEntry[];
+        selected?: FacetEntry[];
+      }
+
       interface FacetResult {
-        typeFacet?: FacetEntry[];
-        speciesFacet?: FacetEntry[];
-        compartmentFacet?: FacetEntry[];
-        keywordFacet?: FacetEntry[];
+        totalNumFount?: number;
+        typeFacet?: Facet;
+        speciesFacet?: Facet;
+        compartmentFacet?: Facet;
+        keywordFacet?: Facet;
       }
 
       const endpoint = query ? "/search/facet_query" : "/search/facet";
@@ -229,38 +257,25 @@ export function registerSearchTools(server: McpServer) {
 
       const lines = [
         query ? `## Facets for "${query}"` : "## Available Search Facets",
+        ...(result.totalNumFount !== undefined ? [`**Matching entries:** ${result.totalNumFount}`] : []),
         "",
       ];
 
-      if (result.typeFacet && result.typeFacet.length > 0) {
-        lines.push("### Types:");
-        result.typeFacet.slice(0, 15).forEach(f => {
-          lines.push(`- ${f.name}: ${f.count}`);
-        });
+      const section = (heading: string, facet: Facet | undefined, limit: number) => {
+        const entries = facet?.available ?? [];
+        if (entries.length === 0) return;
+        lines.push(`### ${heading}:`);
+        entries.slice(0, limit).forEach(f => lines.push(`- ${f.name}: ${f.count}`));
         lines.push("");
-      }
+      };
 
-      if (result.speciesFacet && result.speciesFacet.length > 0) {
-        lines.push("### Species:");
-        result.speciesFacet.slice(0, 10).forEach(f => {
-          lines.push(`- ${f.name}: ${f.count}`);
-        });
-        lines.push("");
-      }
+      section("Types", result.typeFacet, 15);
+      section("Species", result.speciesFacet, 10);
+      section("Compartments", result.compartmentFacet, 10);
+      section("Keywords", result.keywordFacet, 10);
 
-      if (result.compartmentFacet && result.compartmentFacet.length > 0) {
-        lines.push("### Compartments:");
-        result.compartmentFacet.slice(0, 10).forEach(f => {
-          lines.push(`- ${f.name}: ${f.count}`);
-        });
-        lines.push("");
-      }
-
-      if (result.keywordFacet && result.keywordFacet.length > 0) {
-        lines.push("### Keywords:");
-        result.keywordFacet.slice(0, 10).forEach(f => {
-          lines.push(`- ${f.name}: ${f.count}`);
-        });
+      if (!lines.some(l => l.startsWith("###"))) {
+        lines.push("*No facets available.*");
       }
 
       return {

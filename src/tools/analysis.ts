@@ -168,7 +168,7 @@ export function registerAnalysisTools(server: McpServer) {
         "",
         "### Entities:",
         ...result.entities.map((e: FoundEntity) =>
-          `- ${e.id} -> ${e.mapsTo.map(m => `${m.identifier} (${m.resource})`).join(", ")}`
+          `- ${e.id} -> ${e.mapsTo.map(m => `${(m.ids ?? []).join("/")} (${m.resource})`).join(", ")}`
         ),
       ];
 

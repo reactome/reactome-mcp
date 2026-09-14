@@ -249,7 +249,11 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_events_hierarchy",
     "Get the complete event hierarchy (pathways and reactions tree) for a species. Warning: This returns a large data structure.",
     {
-      species: z.string().max(2048).optional().default("Homo sapiens").describe("Species name or taxonomy ID"),
+      // Defaults to the taxonomy ID, not the name: /data/eventsHierarchy
+      // returns HTTP 500 for "Homo sapiens" but 200 for "9606", so the
+      // previous default made this tool fail every time it was called without
+      // an explicit species.
+      species: z.string().max(2048).optional().default("9606").describe("Species taxonomy ID (e.g. 9606). Names are accepted by the API but are unreliable here -- prefer the ID."),
     },
     async ({ species }) => {
       const hierarchy = await contentClient.get<EventHierarchy[]>(`/data/eventsHierarchy/${encodeURIComponent(species)}`);
