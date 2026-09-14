@@ -259,6 +259,53 @@ Only registered when `NEO4J_URI` is set. Designed for curators running the [`rea
 | `reactome://top-pathways/{species}` | Top-level pathways for a species |
 | `reactome://events-hierarchy/{species}` | Full event hierarchy for a species |
 
+## Transports
+
+**stdio** is the default and the one every existing client uses:
+
+```bash
+node dist/index.js
+```
+
+**Streamable HTTP** is for a hosted instance, because a reverse proxy cannot
+front a process that talks over stdin/stdout:
+
+```bash
+MCP_HTTP_PORT=4320 node dist/http-server.js
+# or: MCP_HTTP_PORT=4320 npm run start:http
+```
+
+| variable | default | |
+|---|---|---|
+| `MCP_HTTP_PORT` | *(unset)* | required to serve HTTP |
+| `MCP_HTTP_HOST` | `127.0.0.1` | see below before changing |
+| `MCP_SESSION_TTL_MS` | `1800000` | idle session reaped after 30 min |
+| `MCP_MAX_SESSIONS` | `256` | concurrent session ceiling |
+
+Endpoints: `POST /mcp` (initialize, then requests), `GET /mcp` (server stream),
+`DELETE /mcp` (end session), `GET /health`.
+
+Each session gets its **own** server instance, so two clients cannot interleave
+on shared state. Idle sessions are reaped and the session count is capped, so a
+client that never sends `DELETE` cannot accumulate servers until the process
+dies.
+
+### Why it binds to loopback
+
+`MCP_HTTP_HOST` defaults to `127.0.0.1`, and that is a deliberate default rather
+than a placeholder. The Reactome site already learned this the expensive way:
+crawlers on the public `/ContentService/exporter/*` URLs exhausted Tomcat's heap
+and took the origin down, which is why the sibling render service on that box
+binds loopback only and is reached through the site's own origin.
+
+An MCP endpoint is the same shape of risk and worse per request —
+`reactome_analyze_identifiers` submits a real job to the Analysis Service. Put
+it behind something that rate-limits before binding it anywhere else.
+
+When the host is a loopback address the SDK also turns on DNS-rebinding
+protection, which is what stops a page in someone's browser from driving a
+server bound to their own machine. Binding to `0.0.0.0` turns that off.
+
 ## Development
 
 ```bash

@@ -79,3 +79,29 @@ export const MAX_TOOL_RESPONSE_CHARS = parsePositiveInt(
   process.env.MAX_TOOL_RESPONSE_CHARS,
   40_000
 );
+
+/**
+ * HTTP transport. Off unless a port is set -- stdio stays the default, because
+ * that is what every existing user's client is configured for.
+ *
+ * The host defaults to loopback deliberately. The Reactome site already learned
+ * this lesson the expensive way: crawlers on the public `/ContentService/
+ * exporter/*` URLs exhausted Tomcat's heap and took the origin down, which is
+ * why the sibling render service on that box binds 127.0.0.1 only and is
+ * reached through the site's own origin. An MCP endpoint is the same shape of
+ * risk and worse per request -- `reactome_analyze_identifiers` submits a real
+ * job to the Analysis Service.
+ *
+ * Binding elsewhere is possible and deliberate: set MCP_HTTP_HOST. Do that
+ * behind something that rate-limits.
+ */
+export const MCP_HTTP_PORT = process.env.MCP_HTTP_PORT
+  ? parsePositiveInt(process.env.MCP_HTTP_PORT, 0)
+  : undefined;
+export const MCP_HTTP_HOST = process.env.MCP_HTTP_HOST ?? "127.0.0.1";
+
+/** How long an idle session is kept before its server is torn down. */
+export const MCP_SESSION_TTL_MS = parsePositiveInt(process.env.MCP_SESSION_TTL_MS, 30 * 60_000);
+
+/** Ceiling on concurrent sessions, so a client loop cannot exhaust memory. */
+export const MCP_MAX_SESSIONS = parsePositiveInt(process.env.MCP_MAX_SESSIONS, 256);

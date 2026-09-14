@@ -1,6 +1,6 @@
 # 002 — Transports and hosting
 
-**Status:** open — the design question is stated here, not settled
+**Status:** transport settled 2026-09-14; where it runs is still open
 **Date:** 2026-09-14
 **Constitution:** Principles IV, V
 
@@ -30,11 +30,46 @@ can only make the calls a browser can. A test asserts the gate holds.
 **Analysis runs in the Analysis Service.** The server submits identifiers, holds
 the token, and formats the reply.
 
+## Settled 2026-09-14: the transport exists
+
+Streamable HTTP ships alongside stdio. stdio stays the default and is unchanged.
+
+  - `MCP_HTTP_PORT=4320 node dist/http-server.js`
+  - `POST /mcp`, `GET /mcp`, `DELETE /mcp`, `GET /health`
+  - one server per session, built by `createServer()`
+  - idle sessions reaped at 30 min, concurrency capped at 256
+  - binds `127.0.0.1` unless told otherwise, which also turns on the SDK's
+    DNS-rebinding protection
+
+This was the blocker for everything below: a reverse proxy cannot front a
+process that speaks over stdin/stdout, so there was previously nothing to host.
+
+### The brief for whoever adds it to the website repo
+
+That repository already runs this exact pattern. `render` is a sibling Node
+service in the same compose file, bound loopback-only, reached through the
+site's own origin; `serve-prod.js` reads the proxy table from `proxy.conf.js`,
+so beta and the dev server both proxy it the same way; and
+`deploy/apache/beta-chat-proxy.conf` shows how a service gets a path on the
+beta vhost.
+
+So the work is three small things, not a design exercise:
+
+  1. a compose service running `dist/http-server.js` with `MCP_HTTP_PORT` set,
+     published on `127.0.0.1` only -- copy what `render` does
+  2. an entry in `proxy.conf.js` so the origin forwards a path to it
+  3. an Apache stanza on beta, modelled on `beta-chat-proxy.conf`
+
+**Loopback only to begin with.** Not because public access is wrong, but
+because it is a separate decision that needs rate limiting attached, and the
+comments on the render service record why: crawlers on the public
+`/ContentService/exporter/*` URLs exhausted Tomcat's heap and took the origin
+down. An MCP endpoint is the same shape of risk and worse per request --
+`reactome_analyze_identifiers` submits a real job to the Analysis Service.
+
 ## What is open
 
-1. **Who adds Streamable HTTP, and when.** The SDK provides
-   `StreamableHTTPServerTransport`. The work is small; the operational
-   commitment is not.
+1. ~~**Who adds Streamable HTTP, and when.**~~ *Settled: it is in, see above.*
 
 2. **Where a hosted instance runs.** Spinning it up alongside the Angular
    website has been raised. That would put it behind infrastructure that already
@@ -42,7 +77,9 @@ the token, and formats the reply.
 
 3. **Whether it is public.** A public endpoint needs rate limiting, abuse
    handling, and an answer for what happens when Reactome's own services are
-   slow — this server would become a new way to load them.
+   slow — this server would become a new way to load them. The default binding
+   makes not-public the path of least resistance, which is the right way round
+   for a decision of this shape.
 
 4. **npm publishing.** Deferred by decision, to be settled in one pass with the
    website and the other Reactome repositories rather than piecemeal.
