@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "reactome-mcp": "dist/index.js"
+    "reactome-mcp": "dist/index.js",
+    "reactome-mcp-http": "dist/http-server.js"
   },
   "files": [
     "dist/",
@@ -30,7 +31,8 @@
     "test:coverage": "vitest run --coverage",
     "sweep": "node scripts/sweep-live.mjs",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run typecheck:lint-compiler && npm run build && npm test",
-    "typecheck:lint-compiler": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.eslint.json"
+    "typecheck:lint-compiler": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.eslint.json",
+    "start:http": "node dist/http-server.js"
   },
   "keywords": [
     "mcp",
@@ -43,11 +45,13 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1",
     "neo4j-driver": "^6.2.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
     "@types/node": "^26.5.1",
     "@vitest/coverage-v8": "^5.0.0",
     "eslint": "^10.10.0",
