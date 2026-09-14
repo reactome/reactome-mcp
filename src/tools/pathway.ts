@@ -58,14 +58,29 @@ function formatPathway(pathway: Pathway | Event): string {
   return lines.join("\n");
 }
 
-function formatEventHierarchy(event: EventHierarchy, indent = 0): string[] {
+/**
+ * Render a hierarchy node and its descendants, to `maxDepth` levels.
+ *
+ * The depth limit is the point of this function. Without one it walked the
+ * whole tree: three top-level human pathways rendered ~86 KB, roughly 22,000
+ * tokens spent on a single call, most of it reactions nobody asked about.
+ */
+function formatEventHierarchy(event: EventHierarchy, indent = 0, maxDepth = 3): string[] {
   const prefix = "  ".repeat(indent);
   const lines = [`${prefix}- **${event.name}** (${event.stId}) [${event.type}]`];
 
-  if (event.children) {
-    for (const child of event.children) {
-      lines.push(...formatEventHierarchy(child, indent + 1));
-    }
+  const children = event.children ?? [];
+  if (children.length === 0) return lines;
+
+  if (indent >= maxDepth) {
+    lines.push(
+      `${prefix}  - *(${children.length} more below this level — use reactome_pathway_contained_events on ${event.stId})*`
+    );
+    return lines;
+  }
+
+  for (const child of children) {
+    lines.push(...formatEventHierarchy(child, indent + 1, maxDepth));
   }
 
   return lines;
@@ -285,8 +300,26 @@ export function registerPathwayTools(server: McpServer) {
         .describe(
           "Species taxonomy ID (e.g. 9606). Names are accepted by the API but are unreliable here -- prefer the ID."
         ),
+      max_depth: z
+        .number()
+        .int()
+        .min(1)
+        .max(10)
+        .optional()
+        .default(3)
+        .describe(
+          "How many levels of the tree to render (default 3). Deeper trees get large fast."
+        ),
+      top_level_limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(30)
+        .optional()
+        .default(3)
+        .describe("How many top-level pathways to render (default 3)."),
     },
-    async ({ species }) => {
+    async ({ species, max_depth, top_level_limit }) => {
       const hierarchy = await contentClient.get<EventHierarchy[]>(
         `/data/eventsHierarchy/${encodeURIComponent(species)}`
       );
@@ -297,14 +330,13 @@ export function registerPathwayTools(server: McpServer) {
         "",
       ];
 
-      // Show first 3 top-level pathways with their immediate children
-      hierarchy.slice(0, 3).forEach(top => {
-        lines.push(...formatEventHierarchy(top, 0));
+      hierarchy.slice(0, top_level_limit).forEach(top => {
+        lines.push(...formatEventHierarchy(top, 0, max_depth));
         lines.push("");
       });
 
-      if (hierarchy.length > 3) {
-        lines.push(`... and ${hierarchy.length - 3} more top-level pathways`);
+      if (hierarchy.length > top_level_limit) {
+        lines.push(`... and ${hierarchy.length - top_level_limit} more top-level pathways`);
       }
 
       lines.push(

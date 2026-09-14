@@ -231,9 +231,11 @@ async function main() {
       suspicious.push([tool.name, hits.join(", "), line.trim().slice(0, 100)]);
     } else if (SERVICE_ERROR.test(text.trim())) {
       serviceErrors.push([tool.name, text.trim().slice(0, 120)]);
-    } else if (text.trim().split("\n").filter(Boolean).length <= 1) {
-      // A single line is a heading with no body -- either genuinely empty, or
-      // a section that was skipped because a field was read at the wrong path.
+    } else if (text.trim().split("\n").filter(Boolean).length <= 1 && text.trim().length < 400) {
+      // A single SHORT line is a heading with no body -- either genuinely
+      // empty, or a section skipped because a field was read at the wrong
+      // path. The length check matters: reactome_query returns compact JSON as
+      // one very long line, which is a full answer, not an empty one.
       suspicious.push([tool.name, "empty body", text.trim().slice(0, 100)]);
     } else {
       const missing = (EXPECT[tool.name] ?? []).filter(needle => !text.includes(needle));
