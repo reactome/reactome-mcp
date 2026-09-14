@@ -15,7 +15,10 @@ export function formatGraphSchemaMarkdown(schema: GraphSchema): string {
   const labelEntries = Object.entries(stats.labels ?? {}).sort(([, a], [, b]) => b - a);
   const relEntries = Object.entries(stats.relTypesCount ?? {}).sort(([, a], [, b]) => b - a);
 
-  const propsByLabel = new Map<string, Array<{ name: string; types: string[]; mandatory: boolean }>>();
+  const propsByLabel = new Map<
+    string,
+    Array<{ name: string; types: string[]; mandatory: boolean }>
+  >();
   for (const p of nodeTypeProperties) {
     const key = (p.nodeLabels?.join(":") || p.nodeType) ?? p.nodeType;
     const entry = propsByLabel.get(key) ?? [];
@@ -23,7 +26,10 @@ export function formatGraphSchemaMarkdown(schema: GraphSchema): string {
     propsByLabel.set(key, entry);
   }
 
-  const propsByRel = new Map<string, Array<{ name: string; types: string[]; mandatory: boolean }>>();
+  const propsByRel = new Map<
+    string,
+    Array<{ name: string; types: string[]; mandatory: boolean }>
+  >();
   for (const p of relTypeProperties) {
     const entry = propsByRel.get(p.relType) ?? [];
     entry.push({ name: p.propertyName, types: p.propertyTypes ?? [], mandatory: p.mandatory });
@@ -84,10 +90,18 @@ export function formatGraphSchemaMarkdown(schema: GraphSchema): string {
   if (indexes.length > 0) {
     lines.push(`### Indexes (${indexes.length})`);
     for (const ix of indexes) {
-      const row = ix as { name?: string; labelsOrTypes?: string[]; properties?: string[]; type?: string; state?: string };
+      const row = ix as {
+        name?: string;
+        labelsOrTypes?: string[];
+        properties?: string[];
+        type?: string;
+        state?: string;
+      };
       const labels = row.labelsOrTypes?.join(",") ?? "?";
       const props = row.properties?.join(",") ?? "?";
-      lines.push(`- \`${row.name ?? "?"}\` — ${labels}(${props}) [${row.type ?? "?"}, ${row.state ?? "?"}]`);
+      lines.push(
+        `- \`${row.name ?? "?"}\` — ${labels}(${props}) [${row.type ?? "?"}, ${row.state ?? "?"}]`
+      );
     }
     lines.push("");
   }

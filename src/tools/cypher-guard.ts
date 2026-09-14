@@ -12,19 +12,29 @@
 // curator-facing use case this check is sufficient to prevent accidents.
 
 const WRITE_THROUGH_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
-  { pattern: /\bapoc\.cypher\.(runWrite|doIt)\b/i, label: "apoc.cypher.runWrite / apoc.cypher.doIt" },
-  { pattern: /\bapoc\.periodic\.(iterate|commit|submit|countdown|repeat)\b/i, label: "apoc.periodic.*" },
-  { pattern: /\bapoc\.(create|merge|refactor)\.[a-z]\w*/i, label: "apoc.create.* / apoc.merge.* / apoc.refactor.*" },
+  {
+    pattern: /\bapoc\.cypher\.(runWrite|doIt)\b/i,
+    label: "apoc.cypher.runWrite / apoc.cypher.doIt",
+  },
+  {
+    pattern: /\bapoc\.periodic\.(iterate|commit|submit|countdown|repeat)\b/i,
+    label: "apoc.periodic.*",
+  },
+  {
+    pattern: /\bapoc\.(create|merge|refactor)\.[a-z]\w*/i,
+    label: "apoc.create.* / apoc.merge.* / apoc.refactor.*",
+  },
   { pattern: /\bapoc\.nodes\.delete\b/i, label: "apoc.nodes.delete" },
-  { pattern: /\bapoc\.(load|import|export)\.[a-z]\w*/i, label: "apoc.load.* / apoc.import.* / apoc.export.*" },
+  {
+    pattern: /\bapoc\.(load|import|export)\.[a-z]\w*/i,
+    label: "apoc.load.* / apoc.import.* / apoc.export.*",
+  },
   { pattern: /\bapoc\.trigger\.[a-z]\w*/i, label: "apoc.trigger.*" },
 ];
 
 function stripComments(query: string): string {
   // // line comments, then /* */ block comments
-  return query
-    .replace(/\/\/[^\n]*/g, " ")
-    .replace(/\/\*[\s\S]*?\*\//g, " ");
+  return query.replace(/\/\/[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
 }
 
 export class WriteThroughRejected extends Error {

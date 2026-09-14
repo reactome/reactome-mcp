@@ -39,11 +39,7 @@ describe("capCypherRows", () => {
   });
 
   it("reports both width and total-cap truncation together", () => {
-    const rows = [
-      { big: "z".repeat(3000) },
-      { small: "ok" },
-      { small: "ok" },
-    ];
+    const rows = [{ big: "z".repeat(3000) }, { small: "ok" }, { small: "ok" }];
     const { stats } = capCypherRows(rows, 10, 500, 500);
     expect(stats.rowsWidthTruncated).toBeGreaterThan(0);
   });

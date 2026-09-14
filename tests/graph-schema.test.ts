@@ -15,14 +15,46 @@ function minimalSchema(): GraphSchema {
     },
     schema: { Pathway: { type: "node" } },
     nodeTypeProperties: [
-      { nodeType: ":`Pathway`", nodeLabels: ["Pathway"], propertyName: "stId", propertyTypes: ["String"], mandatory: true },
-      { nodeType: ":`Pathway`", nodeLabels: ["Pathway"], propertyName: "displayName", propertyTypes: ["String"], mandatory: false },
+      {
+        nodeType: ":`Pathway`",
+        nodeLabels: ["Pathway"],
+        propertyName: "stId",
+        propertyTypes: ["String"],
+        mandatory: true,
+      },
+      {
+        nodeType: ":`Pathway`",
+        nodeLabels: ["Pathway"],
+        propertyName: "displayName",
+        propertyTypes: ["String"],
+        mandatory: false,
+      },
     ],
     relTypeProperties: [
-      { relType: "hasEvent", sourceNodeLabels: ["Pathway"], targetNodeLabels: ["Reaction"], propertyName: "stoichiometry", propertyTypes: ["Long"], mandatory: false },
+      {
+        relType: "hasEvent",
+        sourceNodeLabels: ["Pathway"],
+        targetNodeLabels: ["Reaction"],
+        propertyName: "stoichiometry",
+        propertyTypes: ["Long"],
+        mandatory: false,
+      },
     ],
-    indexes: [{ name: "pathway_stId", labelsOrTypes: ["Pathway"], properties: ["stId"], type: "BTREE", state: "ONLINE" }],
-    constraints: [{ name: "pathway_stId_unique", description: "CONSTRAINT ON ( pathway:Pathway ) ASSERT (pathway.stId) IS UNIQUE" }],
+    indexes: [
+      {
+        name: "pathway_stId",
+        labelsOrTypes: ["Pathway"],
+        properties: ["stId"],
+        type: "BTREE",
+        state: "ONLINE",
+      },
+    ],
+    constraints: [
+      {
+        name: "pathway_stId_unique",
+        description: "CONSTRAINT ON ( pathway:Pathway ) ASSERT (pathway.stId) IS UNIQUE",
+      },
+    ],
   };
 }
 
@@ -103,7 +135,9 @@ describe("fetchGraphSchema caching", () => {
 
   it("dedupes concurrent in-flight calls to a single fetch", async () => {
     let resolveStats: (v: unknown) => void = () => {};
-    const statsPromise = new Promise((r) => { resolveStats = r; });
+    const statsPromise = new Promise(r => {
+      resolveStats = r;
+    });
 
     (runRead as ReturnType<typeof vi.fn>).mockImplementation(async (cypher: string) => {
       if (cypher.includes("dbms.components"))
@@ -125,8 +159,9 @@ describe("fetchGraphSchema caching", () => {
     expect(r1).toBe(r2);
     expect(r2).toBe(r3);
 
-    const statsCalls = (runRead as ReturnType<typeof vi.fn>).mock.calls
-      .filter(([q]) => String(q).includes("apoc.meta.stats")).length;
+    const statsCalls = (runRead as ReturnType<typeof vi.fn>).mock.calls.filter(([q]) =>
+      String(q).includes("apoc.meta.stats")
+    ).length;
     expect(statsCalls).toBe(1);
   });
 

@@ -5,8 +5,12 @@ dist/
 .env
 .env.*
 
-# Claude Code
-.claude/
+# Claude Code -- the Spec Kit skills under .claude/skills/ are tracked
+# deliberately: people clone this repo and point an agent at it, so the
+# workflow should come with it. Only personal, machine-local settings are
+# ignored.
+.claude/settings.local.json
+.claude/*.local.json
 
 # OS files
 .DS_Store

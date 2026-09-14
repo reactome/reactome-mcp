@@ -8,7 +8,10 @@ export class ContentClient {
     this.baseUrl = baseUrl;
   }
 
-  private buildUrl(path: string, params?: Record<string, string | number | boolean | undefined>): URL {
+  private buildUrl(
+    path: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): URL {
     const relativePath = path.startsWith("/") ? path.slice(1) : path;
     const url = new URL(relativePath, this.baseUrl);
     if (params) {
@@ -21,7 +24,10 @@ export class ContentClient {
     return url;
   }
 
-  async get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+  async get<T>(
+    path: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): Promise<T> {
     const url = this.buildUrl(path, params);
     const response = await fetchWithRetry(url.toString(), {
       service: "content",
@@ -36,7 +42,11 @@ export class ContentClient {
     return response.json() as Promise<T>;
   }
 
-  async post<T>(path: string, body: unknown, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+  async post<T>(
+    path: string,
+    body: unknown,
+    params?: Record<string, string | number | boolean | undefined>
+  ): Promise<T> {
     const url = this.buildUrl(path, params);
     const response = await fetchWithRetry(url.toString(), {
       service: "content",

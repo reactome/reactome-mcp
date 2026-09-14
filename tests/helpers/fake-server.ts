@@ -22,7 +22,12 @@ export function createFakeServer() {
   const resources = new Map<string, CapturedResource>();
 
   const fake = {
-    tool(name: string, description: string, schema: Record<string, unknown>, handler: CapturedTool["handler"]) {
+    tool(
+      name: string,
+      description: string,
+      schema: Record<string, unknown>,
+      handler: CapturedTool["handler"]
+    ) {
       tools.set(name, { name, description, schema, handler });
     },
     resource(name: string, uri: string, handler: CapturedResource["handler"]) {
@@ -54,4 +59,38 @@ export function createFakeServer() {
     invoke,
     readResource,
   };
+}
+
+/**
+ * The first argument to fetch is `string | URL | Request`. `String(...)` works
+ * for the first two and yields "[object Object]" for the third, so tests that
+ * assert on the URL go through this instead.
+ */
+export function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
+/**
+ * Read the single text block out of a tool result.
+ *
+ * Under `noUncheckedIndexedAccess` every `result.content[0].text` is a possible
+ * undefined, and littering tests with `!` defeats the point of the flag. This
+ * asserts the shape once, with a message that says which expectation failed.
+ */
+export function textOf(result: { content: Array<{ type: string; text: string }> }): string {
+  const first = result.content[0];
+  if (!first) throw new Error("tool returned no content blocks");
+  return first.text;
+}
+
+/** The first fetch call's URL, for asserting on the endpoint a tool called. */
+export function calledUrl(
+  calls: Array<[input: string | URL | Request, init?: RequestInit]>,
+  index = 0
+): string {
+  const call = calls[index];
+  if (!call) throw new Error(`fetch was not called ${index + 1} time(s)`);
+  return requestUrl(call[0]);
 }

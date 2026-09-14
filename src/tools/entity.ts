@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { contentClient } from "../clients/content.js";
-import type { PhysicalEntity, Complex, ReferenceEntity, Event } from "../types/index.js";
+import type { PhysicalEntity, Complex, ReferenceEntity } from "../types/index.js";
 
 /**
  * `/data/participants/{id}` returns a *reduced* projection, not a full
@@ -90,10 +90,11 @@ function formatEntity(entity: EnhancedEntity): string {
     });
   }
 
-  if (entity.summation && entity.summation.length > 0) {
+  const summary = entity.summation?.[0]?.text;
+  if (summary) {
     lines.push("");
     lines.push("### Summary:");
-    lines.push(entity.summation[0].text);
+    lines.push(summary);
   }
 
   return lines.join("\n");
@@ -108,7 +109,9 @@ export function registerEntityTools(server: McpServer) {
       id: z.string().max(2048).describe("Reactome stable ID (e.g., R-HSA-123456) or database ID"),
     },
     async ({ id }) => {
-      const entity = await contentClient.get<EnhancedEntity>(`/data/query/enhanced/${encodeURIComponent(id)}`);
+      const entity = await contentClient.get<EnhancedEntity>(
+        `/data/query/enhanced/${encodeURIComponent(id)}`
+      );
       return {
         content: [{ type: "text", text: formatEntity(entity) }],
       };
@@ -123,7 +126,9 @@ export function registerEntityTools(server: McpServer) {
       id: z.string().max(2048).describe("Complex stable ID or database ID"),
     },
     async ({ id }) => {
-      const subunits = await contentClient.get<PhysicalEntity[]>(`/data/complex/${encodeURIComponent(id)}/subunits`);
+      const subunits = await contentClient.get<PhysicalEntity[]>(
+        `/data/complex/${encodeURIComponent(id)}/subunits`
+      );
 
       // Group by type
       const byType: Record<string, PhysicalEntity[]> = {};
@@ -161,13 +166,17 @@ export function registerEntityTools(server: McpServer) {
       id: z.string().max(2048).describe("Entity stable ID or database ID"),
     },
     async ({ id }) => {
-      const otherForms = await contentClient.get<PhysicalEntity[]>(`/data/entity/${encodeURIComponent(id)}/otherForms`);
+      const otherForms = await contentClient.get<PhysicalEntity[]>(
+        `/data/entity/${encodeURIComponent(id)}/otherForms`
+      );
 
       const lines = [
         `## Other Forms of ${id}`,
         `**Total:** ${otherForms.length}`,
         "",
-        ...otherForms.slice(0, 50).map(e => `- **${e.displayName}** (${e.stId}) [${e.schemaClass}]`),
+        ...otherForms
+          .slice(0, 50)
+          .map(e => `- **${e.displayName}** (${e.stId}) [${e.schemaClass}]`),
       ];
 
       if (otherForms.length > 50) {
@@ -188,7 +197,9 @@ export function registerEntityTools(server: McpServer) {
       id: z.string().max(2048).describe("Entity stable ID or database ID"),
     },
     async ({ id }) => {
-      const containers = await contentClient.get<ComponentOfEntry[]>(`/data/entity/${encodeURIComponent(id)}/componentOf`);
+      const containers = await contentClient.get<ComponentOfEntry[]>(
+        `/data/entity/${encodeURIComponent(id)}/componentOf`
+      );
 
       // Each entry holds several containers, so the count people care about is
       // the flattened one, not the number of relationship types.
@@ -203,8 +214,9 @@ export function registerEntityTools(server: McpServer) {
           // "hasComponent", ...) carrying parallel arrays of the containers
           // reached by it -- names[i] pairs with stIds[i] and schemaClasses[i].
           // There is no singular displayName/stId/schemaClass on the entry.
-          (c.stIds ?? []).map((stId, i) =>
-            `- **${c.names?.[i] ?? stId}** (${stId}) [${c.schemaClasses?.[i] ?? c.type}]`
+          (c.stIds ?? []).map(
+            (stId, i) =>
+              `- **${c.names?.[i] ?? stId}** (${stId}) [${c.schemaClasses?.[i] ?? c.type}]`
           )
         ),
       ];
@@ -228,7 +240,9 @@ export function registerEntityTools(server: McpServer) {
       id: z.string().max(2048).describe("Event (pathway or reaction) stable ID or database ID"),
     },
     async ({ id }) => {
-      const participants = await contentClient.get<Participant[]>(`/data/participants/${encodeURIComponent(id)}`);
+      const participants = await contentClient.get<Participant[]>(
+        `/data/participants/${encodeURIComponent(id)}`
+      );
 
       // Group by type
       const byType: Record<string, Participant[]> = {};
@@ -238,11 +252,7 @@ export function registerEntityTools(server: McpServer) {
         byType[type].push(p);
       });
 
-      const lines = [
-        `## Participants in ${id}`,
-        `**Total:** ${participants.length}`,
-        "",
-      ];
+      const lines = [`## Participants in ${id}`, `**Total:** ${participants.length}`, ""];
 
       Object.entries(byType).forEach(([type, entities]) => {
         lines.push(`### ${type} (${entities.length}):`);
@@ -271,7 +281,9 @@ export function registerEntityTools(server: McpServer) {
       id: z.string().max(2048).describe("Event stable ID or database ID"),
     },
     async ({ id }) => {
-      const entities = await contentClient.get<PhysicalEntity[]>(`/data/participants/${encodeURIComponent(id)}/participatingPhysicalEntities`);
+      const entities = await contentClient.get<PhysicalEntity[]>(
+        `/data/participants/${encodeURIComponent(id)}/participatingPhysicalEntities`
+      );
 
       const lines = [
         `## Participating Physical Entities in ${id}`,
@@ -298,7 +310,9 @@ export function registerEntityTools(server: McpServer) {
       id: z.string().max(2048).describe("Event stable ID or database ID"),
     },
     async ({ id }) => {
-      const refs = await contentClient.get<ReferenceEntity[]>(`/data/participants/${encodeURIComponent(id)}/referenceEntities`);
+      const refs = await contentClient.get<ReferenceEntity[]>(
+        `/data/participants/${encodeURIComponent(id)}/referenceEntities`
+      );
 
       // Group by database
       const byDb: Record<string, ReferenceEntity[]> = {};
@@ -308,11 +322,7 @@ export function registerEntityTools(server: McpServer) {
         byDb[db].push(r);
       });
 
-      const lines = [
-        `## Reference Entities in ${id}`,
-        `**Total:** ${refs.length}`,
-        "",
-      ];
+      const lines = [`## Reference Entities in ${id}`, `**Total:** ${refs.length}`, ""];
 
       Object.entries(byDb).forEach(([db, entities]) => {
         lines.push(`### ${db} (${entities.length}):`);
@@ -336,11 +346,16 @@ export function registerEntityTools(server: McpServer) {
     "reactome_complexes_containing",
     "Find all Reactome complexes that contain a specific external identifier (e.g., UniProt ID).",
     {
-      resource: z.string().max(2048).describe("Database name (e.g., 'UniProt', 'ChEBI', 'Ensembl')"),
+      resource: z
+        .string()
+        .max(2048)
+        .describe("Database name (e.g., 'UniProt', 'ChEBI', 'Ensembl')"),
       identifier: z.string().max(2048).describe("External identifier (e.g., 'P04637' for UniProt)"),
     },
     async ({ resource, identifier }) => {
-      const complexes = await contentClient.get<Complex[]>(`/data/complexes/${encodeURIComponent(resource)}/${encodeURIComponent(identifier)}`);
+      const complexes = await contentClient.get<Complex[]>(
+        `/data/complexes/${encodeURIComponent(resource)}/${encodeURIComponent(identifier)}`
+      );
 
       const lines = [
         `## Complexes Containing ${resource}:${identifier}`,

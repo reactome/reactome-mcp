@@ -33,6 +33,7 @@ function formatSpecies(result: AnalysisResult): string {
   if (!species || species.length === 0) return "unavailable";
   const ranked = [...species].sort((a, b) => b.pathways - a.pathways);
   const top = ranked[0];
+  if (!top) return "unavailable";
   const others = ranked.length - 1;
   return others > 0
     ? `${top.name} (${top.pathways} pathways, and ${others} other species)`
@@ -71,7 +72,9 @@ export function registerAnalysisTools(server: McpServer) {
       species: z.string().max(2048).optional().describe("Filter by species (taxonomy ID or name)"),
     },
     async ({ id, projection, interactors, species }) => {
-      const endpoint = projection ? `/identifier/${encodeURIComponent(id)}/projection` : `/identifier/${encodeURIComponent(id)}`;
+      const endpoint = projection
+        ? `/identifier/${encodeURIComponent(id)}/projection`
+        : `/identifier/${encodeURIComponent(id)}`;
       const result = await analysisClient.get<AnalysisResult>(endpoint, {
         interactors,
         species,
@@ -91,11 +94,21 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analyze_identifiers",
     "Perform pathway enrichment analysis on a list of gene/protein identifiers. Returns over-represented pathways sorted by p-value.",
     {
-      identifiers: z.array(z.string().max(2048)).describe("List of gene symbols, UniProt IDs, or other identifiers"),
+      identifiers: z
+        .array(z.string().max(2048))
+        .describe("List of gene symbols, UniProt IDs, or other identifiers"),
       projection: z.boolean().optional().default(true).describe("Project results to Homo sapiens"),
-      interactors: z.boolean().optional().default(false).describe("Include interactor data in analysis"),
+      interactors: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Include interactor data in analysis"),
       include_disease: z.boolean().optional().default(true).describe("Include disease pathways"),
-      p_value_threshold: z.number().optional().default(0.05).describe("Filter pathways by p-value threshold"),
+      p_value_threshold: z
+        .number()
+        .optional()
+        .default(0.05)
+        .describe("Filter pathways by p-value threshold"),
     },
     async ({ identifiers, projection, interactors, include_disease, p_value_threshold }) => {
       const endpoint = projection ? "/identifiers/projection" : "/identifiers/";
@@ -125,7 +138,18 @@ export function registerAnalysisTools(server: McpServer) {
     {
       token: z.string().max(2048).describe("Analysis token from a previous analysis"),
       species: z.string().max(2048).optional().describe("Filter by species"),
-      sort_by: z.enum(["NAME", "TOTAL_ENTITIES", "FOUND_ENTITIES", "ENTITIES_PVALUE", "ENTITIES_FDR", "ENTITIES_RATIO"]).optional().default("ENTITIES_PVALUE").describe("Sort field"),
+      sort_by: z
+        .enum([
+          "NAME",
+          "TOTAL_ENTITIES",
+          "FOUND_ENTITIES",
+          "ENTITIES_PVALUE",
+          "ENTITIES_FDR",
+          "ENTITIES_RATIO",
+        ])
+        .optional()
+        .default("ENTITIES_PVALUE")
+        .describe("Sort field"),
       order: z.enum(["ASC", "DESC"]).optional().default("ASC").describe("Sort order"),
       page: z.number().optional().default(1).describe("Page number"),
       page_size: z.number().optional().default(25).describe("Results per page"),
@@ -154,12 +178,20 @@ export function registerAnalysisTools(server: McpServer) {
     {
       token: z.string().max(2048).describe("Analysis token"),
       pathway: z.string().max(2048).describe("Pathway stable ID (e.g., R-HSA-109582)"),
-      resource: z.string().max(2048).optional().default("TOTAL").describe("Resource filter (TOTAL, UNIPROT, ENSEMBL, etc.)"),
+      resource: z
+        .string()
+        .max(2048)
+        .optional()
+        .default("TOTAL")
+        .describe("Resource filter (TOTAL, UNIPROT, ENSEMBL, etc.)"),
     },
     async ({ token, pathway, resource }) => {
-      const result = await analysisClient.get<FoundElements>(`/token/${token}/found/all/${pathway}`, {
-        resource,
-      });
+      const result = await analysisClient.get<FoundElements>(
+        `/token/${token}/found/all/${pathway}`,
+        {
+          resource,
+        }
+      );
 
       const lines = [
         `## Found Elements in ${result.pathway}`,
@@ -167,8 +199,9 @@ export function registerAnalysisTools(server: McpServer) {
         `**Found interactors:** ${result.foundInteractors}`,
         "",
         "### Entities:",
-        ...result.entities.map((e: FoundEntity) =>
-          `- ${e.id} -> ${e.mapsTo.map(m => `${(m.ids ?? []).join("/")} (${m.resource})`).join(", ")}`
+        ...result.entities.map(
+          (e: FoundEntity) =>
+            `- ${e.id} -> ${e.mapsTo.map(m => `${(m.ids ?? []).join("/")} (${m.resource})`).join(", ")}`
         ),
       ];
 
@@ -240,17 +273,23 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_compare_species",
     "Compare Homo sapiens pathways to another species to identify orthologous pathways.",
     {
-      species: z.string().max(2048).describe("Species to compare (taxonomy ID or name, e.g., 'Mus musculus' or '10090')"),
+      species: z
+        .string()
+        .max(2048)
+        .describe("Species to compare (taxonomy ID or name, e.g., 'Mus musculus' or '10090')"),
       page: z.number().optional().default(1).describe("Page number"),
       page_size: z.number().optional().default(25).describe("Results per page"),
     },
     async ({ species, page, page_size }) => {
-      const result = await analysisClient.get<AnalysisResult>(`/species/homoSapiens/${encodeURIComponent(species)}`, {
-        page,
-        pageSize: page_size,
-        sortBy: "ENTITIES_PVALUE",
-        order: "ASC",
-      });
+      const result = await analysisClient.get<AnalysisResult>(
+        `/species/homoSapiens/${encodeURIComponent(species)}`,
+        {
+          page,
+          pageSize: page_size,
+          sortBy: "ENTITIES_PVALUE",
+          order: "ASC",
+        }
+      );
 
       return {
         content: [{ type: "text", text: formatAnalysisResult(result) }],

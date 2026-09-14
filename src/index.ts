@@ -31,7 +31,7 @@ async function main() {
   // wait 15–30s on apoc.meta.schema(). Failures are logged; the cache
   // stays empty and the tool call will retry on demand.
   if (NEO4J_URI) {
-    fetchGraphSchema().catch((err) => {
+    fetchGraphSchema().catch(err => {
       logger.warn("graph schema prefetch failed; will retry on first use", {
         error: err instanceof Error ? err.message : String(err),
       });
@@ -39,7 +39,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+main().catch(error => {
   logger.error("fatal error during startup", {
     error: error instanceof Error ? error.message : String(error),
   });

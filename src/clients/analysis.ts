@@ -22,7 +22,10 @@ export class AnalysisClient {
     });
   }
 
-  async get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+  async get<T>(
+    path: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): Promise<T> {
     const url = this.resolvePath(path);
     this.applyParams(url, params);
 

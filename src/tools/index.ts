@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { contentClient } from "../clients/content.js";
-import type { Species, Disease, DatabaseInfo, Pathway, MappingResult } from "../types/index.js";
+import type { Species, Disease, Pathway } from "../types/index.js";
 
 import { registerAnalysisTools } from "./analysis.js";
 import { registerPathwayTools } from "./pathway.js";
@@ -23,9 +23,7 @@ function installRequestContextWrapper(server: McpServer) {
   const original = server.tool.bind(server);
   // The SDK's tool() is an overloaded method; we only ever call the 4-arg
   // form (name, description, schema, handler). Keep the wrapper permissive.
-  (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (
-    ...args: unknown[]
-  ) => {
+  (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (...args: unknown[]) => {
     const handler = args[args.length - 1];
     if (typeof handler !== "function") {
       return (original as (...a: unknown[]) => unknown)(...args);
@@ -62,7 +60,11 @@ function registerUtilityTools(server: McpServer) {
     "reactome_species",
     "Get the list of species available in Reactome.",
     {
-      main_only: z.boolean().optional().default(false).describe("Only return main species with curated pathways"),
+      main_only: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Only return main species with curated pathways"),
     },
     async ({ main_only }) => {
       const endpoint = main_only ? "/data/species/main" : "/data/species/all";
@@ -75,7 +77,9 @@ function registerUtilityTools(server: McpServer) {
         "",
         "| Name | Taxonomy ID | Short Name |",
         "|------|-------------|------------|",
-        ...species.slice(0, 50).map(s => `| ${s.displayName} | ${s.taxId} | ${s.shortName || "-"} |`),
+        ...species
+          .slice(0, 50)
+          .map(s => `| ${s.displayName} | ${s.taxId} | ${s.shortName || "-"} |`),
       ];
 
       if (species.length > 50) {
@@ -100,7 +104,12 @@ function registerUtilityTools(server: McpServer) {
         `## Reactome Diseases`,
         `**Total:** ${diseases.length}`,
         "",
-        ...diseases.slice(0, 50).map(d => `- **${d.displayName}**${d.identifier ? ` (${d.databaseName}:${d.identifier})` : ""}`),
+        ...diseases
+          .slice(0, 50)
+          .map(
+            d =>
+              `- **${d.displayName}**${d.identifier ? ` (${d.databaseName}:${d.identifier})` : ""}`
+          ),
       ];
 
       if (diseases.length > 50) {
@@ -141,7 +150,10 @@ function registerUtilityTools(server: McpServer) {
     "reactome_mapping_pathways",
     "Map an external identifier to Reactome pathways.",
     {
-      resource: z.string().max(2048).describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
+      resource: z
+        .string()
+        .max(2048)
+        .describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
       identifier: z.string().max(2048).describe("External identifier"),
     },
     async ({ resource, identifier }) => {
@@ -153,7 +165,9 @@ function registerUtilityTools(server: McpServer) {
         `## Pathways for ${resource}:${identifier}`,
         `**Found:** ${pathways.length} pathways`,
         "",
-        ...pathways.slice(0, 50).map(p => `- **${p.displayName}** (${p.stId}) - ${p.speciesName || "Unknown species"}`),
+        ...pathways
+          .slice(0, 50)
+          .map(p => `- **${p.displayName}** (${p.stId}) - ${p.speciesName || "Unknown species"}`),
       ];
 
       if (pathways.length > 50) {
@@ -171,7 +185,10 @@ function registerUtilityTools(server: McpServer) {
     "reactome_mapping_reactions",
     "Map an external identifier to Reactome reactions.",
     {
-      resource: z.string().max(2048).describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
+      resource: z
+        .string()
+        .max(2048)
+        .describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
       identifier: z.string().max(2048).describe("External identifier"),
     },
     async ({ resource, identifier }) => {
@@ -242,7 +259,11 @@ function registerUtilityTools(server: McpServer) {
     "Query any Reactome database object by its identifier. Returns detailed information about the object.",
     {
       id: z.string().max(2048).describe("Reactome stable ID or database ID"),
-      attribute: z.string().max(2048).optional().describe("Specific attribute to retrieve (optional)"),
+      attribute: z
+        .string()
+        .max(2048)
+        .optional()
+        .describe("Specific attribute to retrieve (optional)"),
     },
     async ({ id, attribute }) => {
       const endpoint = attribute

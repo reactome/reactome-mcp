@@ -27,22 +27,21 @@ interface PathwaySearchResult {
 }
 
 function stripHtml(text: string): string {
-  return text.replace(/<[^>]*>/g, '');
+  return text.replace(/<[^>]*>/g, "");
 }
 
 function formatSearchEntry(entry: SearchEntry): string {
   const name = stripHtml(entry.name);
-  const lines = [
-    `- **${name}** (${entry.stId})`,
-    `  - Type: ${entry.exactType}`,
-  ];
+  const lines = [`- **${name}** (${entry.stId})`, `  - Type: ${entry.exactType}`];
 
   if (entry.species && entry.species.length > 0) {
     lines.push(`  - Species: ${entry.species.join(", ")}`);
   }
 
   if (entry.referenceIdentifier) {
-    lines.push(`  - Reference: ${entry.referenceIdentifier}${entry.referenceName ? ` (${entry.referenceName})` : ""}`);
+    lines.push(
+      `  - Reference: ${entry.referenceIdentifier}${entry.referenceName ? ` (${entry.referenceName})` : ""}`
+    );
   }
 
   if (entry.summation) {
@@ -54,16 +53,35 @@ function formatSearchEntry(entry: SearchEntry): string {
   return lines.join("\n");
 }
 
-function flattenSearchResults(result: SearchResult): { entries: SearchEntry[]; totalCount: number } {
+function flattenSearchResults(result: SearchResult): {
+  entries: SearchEntry[];
+  totalCount: number;
+} {
   const entries: SearchEntry[] = [];
   let totalCount = 0;
 
-  for (const group of result.results) {
+  for (const group of result.results ?? []) {
     totalCount += group.entriesCount;
     entries.push(...group.entries);
   }
 
   return { entries, totalCount };
+}
+
+/**
+ * `/search/diagram/{id}` does NOT return the grouped shape that
+ * `/search/query` does. Verified against the live Content Service:
+ *
+ *   GET /search/diagram/R-HSA-109581?query=TP53
+ *   {"entries": [{...}], "facets": [{"name": "Complex", "count": 4}], "found": 13}
+ *
+ * There is no `results` array to group over, so flattenSearchResults threw
+ * "result.results is not iterable" -- this tool had never returned an answer.
+ */
+interface DiagramSearchResult {
+  entries?: SearchEntry[];
+  facets?: FacetEntry[];
+  found?: number;
 }
 
 export function registerSearchTools(server: McpServer) {
@@ -72,10 +90,23 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search",
     "Search the Reactome knowledgebase for pathways, reactions, proteins, genes, compounds, and other entities.",
     {
-      query: z.string().max(2048).describe("Search term (gene name, protein, pathway name, disease, etc.)"),
-      species: z.string().max(2048).optional().describe("Filter by species (e.g., 'Homo sapiens', 'Mus musculus')"),
-      types: z.array(z.string().max(2048)).optional().describe("Filter by type (Pathway, Reaction, Protein, Gene, Complex, etc.)"),
-      compartments: z.array(z.string().max(2048)).optional().describe("Filter by cellular compartment"),
+      query: z
+        .string()
+        .max(2048)
+        .describe("Search term (gene name, protein, pathway name, disease, etc.)"),
+      species: z
+        .string()
+        .max(2048)
+        .optional()
+        .describe("Filter by species (e.g., 'Homo sapiens', 'Mus musculus')"),
+      types: z
+        .array(z.string().max(2048))
+        .optional()
+        .describe("Filter by type (Pathway, Reaction, Protein, Gene, Complex, etc.)"),
+      compartments: z
+        .array(z.string().max(2048))
+        .optional()
+        .describe("Filter by cellular compartment"),
       keywords: z.array(z.string().max(2048)).optional().describe("Filter by keywords"),
       rows: z.number().optional().default(25).describe("Number of results to return"),
       cluster: z.boolean().optional().default(true).describe("Cluster related results"),
@@ -172,11 +203,7 @@ export function registerSearchTools(server: McpServer) {
       const result = await contentClient.get<SuggestResult>("/search/suggest", { query });
       const suggestions = Array.isArray(result) ? result : [];
 
-      const lines = [
-        `## Suggestions for "${query}"`,
-        "",
-        ...suggestions.map(s => `- ${s}`),
-      ];
+      const lines = [`## Suggestions for "${query}"`, "", ...suggestions.map(s => `- ${s}`)];
 
       if (suggestions.length === 0) {
         lines.push("*No suggestions found*");
@@ -199,10 +226,7 @@ export function registerSearchTools(server: McpServer) {
       const result = await contentClient.get<SpellcheckResult>("/search/spellcheck", { query });
       const suggestions = Array.isArray(result) ? result : [];
 
-      const lines = [
-        `## Spellcheck for "${query}"`,
-        "",
-      ];
+      const lines = [`## Spellcheck for "${query}"`, ""];
 
       if (suggestions.length > 0) {
         lines.push("**Did you mean:**");
@@ -222,7 +246,11 @@ export function registerSearchTools(server: McpServer) {
     "reactome_search_facets",
     "Get available facets (filters) for search results, either globally or for a specific query.",
     {
-      query: z.string().max(2048).optional().describe("Search term (optional, returns global facets if omitted)"),
+      query: z
+        .string()
+        .max(2048)
+        .optional()
+        .describe("Search term (optional, returns global facets if omitted)"),
     },
     async ({ query }) => {
       /**
@@ -257,7 +285,9 @@ export function registerSearchTools(server: McpServer) {
 
       const lines = [
         query ? `## Facets for "${query}"` : "## Available Search Facets",
-        ...(result.totalNumFount !== undefined ? [`**Matching entries:** ${result.totalNumFount}`] : []),
+        ...(result.totalNumFount !== undefined
+          ? [`**Matching entries:** ${result.totalNumFount}`]
+          : []),
         "",
       ];
 
@@ -291,15 +321,26 @@ export function registerSearchTools(server: McpServer) {
     {
       db_id: z.number().describe("Reactome database ID of the entity"),
       species: z.string().max(2048).optional().describe("Filter by species"),
-      include_interactors: z.boolean().optional().default(false).describe("Include interactor pathways"),
-      direct_only: z.boolean().optional().default(false).describe("Only pathways where entity appears directly in diagram"),
+      include_interactors: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Include interactor pathways"),
+      direct_only: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Only pathways where entity appears directly in diagram"),
     },
     async ({ db_id, species, include_interactors, direct_only }) => {
-      const result = await contentClient.get<PathwaySearchResult[]>(`/search/pathways/of/${db_id}`, {
-        species,
-        includeInteractors: include_interactors,
-        directlyInDiagram: direct_only,
-      });
+      const result = await contentClient.get<PathwaySearchResult[]>(
+        `/search/pathways/of/${db_id}`,
+        {
+          species,
+          includeInteractors: include_interactors,
+          directlyInDiagram: direct_only,
+        }
+      );
 
       const lines = [
         `## Pathways Containing Entity ${db_id}`,
@@ -328,19 +369,27 @@ export function registerSearchTools(server: McpServer) {
       include_interactors: z.boolean().optional().default(false).describe("Include interactors"),
     },
     async ({ diagram, query, include_interactors }) => {
-      const result = await contentClient.get<SearchResult>(`/search/diagram/${encodeURIComponent(diagram)}`, {
-        query,
-        includeInteractors: include_interactors,
-        rows: 50,
-      });
-      const { entries, totalCount } = flattenSearchResults(result);
+      const result = await contentClient.get<DiagramSearchResult>(
+        `/search/diagram/${encodeURIComponent(diagram)}`,
+        {
+          query,
+          includeInteractors: include_interactors,
+          rows: 50,
+        }
+      );
+      const entries = result.entries ?? [];
 
       const lines = [
         `## Search in Diagram ${diagram} for "${query}"`,
-        `**Found:** ${totalCount} results`,
+        `**Found:** ${result.found ?? entries.length} results`,
         "",
-        ...entries.map(formatSearchEntry),
       ];
+
+      if (entries.length > 0) {
+        lines.push(...entries.map(formatSearchEntry));
+      } else {
+        lines.push("*No matches in this diagram.*");
+      }
 
       return {
         content: [{ type: "text", text: lines.join("\n") }],

@@ -98,7 +98,9 @@ export function registerCypherTools(server: McpServer) {
         .max(MAX_ROW_CHARS_CAP)
         .optional()
         .default(MAX_ROW_CHARS_DEFAULT)
-        .describe(`Maximum JSON chars per row before replacing with a summary (default ${MAX_ROW_CHARS_DEFAULT}, cap ${MAX_ROW_CHARS_CAP})`),
+        .describe(
+          `Maximum JSON chars per row before replacing with a summary (default ${MAX_ROW_CHARS_DEFAULT}, cap ${MAX_ROW_CHARS_CAP})`
+        ),
       max_total_chars: z
         .number()
         .int()
@@ -106,7 +108,9 @@ export function registerCypherTools(server: McpServer) {
         .max(MAX_TOTAL_CHARS_CAP)
         .optional()
         .default(MAX_TOTAL_CHARS_DEFAULT)
-        .describe(`Maximum total JSON chars across all rows before truncation (default ${MAX_TOTAL_CHARS_DEFAULT}, cap ${MAX_TOTAL_CHARS_CAP})`),
+        .describe(
+          `Maximum total JSON chars across all rows before truncation (default ${MAX_TOTAL_CHARS_DEFAULT}, cap ${MAX_TOTAL_CHARS_CAP})`
+        ),
     },
     async ({ query, params, max_rows, max_row_chars, max_total_chars }) => {
       rejectWriteThroughCalls(query);
@@ -117,8 +121,10 @@ export function registerCypherTools(server: McpServer) {
       const notes: string[] = [];
       notes.push(`**Rows returned:** ${output.length} of ${rows.length}`);
       if (stats.rowCountTruncated) notes.push(`(row-count cap: ${max_rows})`);
-      if (stats.rowsWidthTruncated > 0) notes.push(`**Wide rows summarized:** ${stats.rowsWidthTruncated}`);
-      if (stats.stoppedAtTotal) notes.push(`**Total size cap reached (${max_total_chars} chars); later rows omitted.**`);
+      if (stats.rowsWidthTruncated > 0)
+        notes.push(`**Wide rows summarized:** ${stats.rowsWidthTruncated}`);
+      if (stats.stoppedAtTotal)
+        notes.push(`**Total size cap reached (${max_total_chars} chars); later rows omitted.**`);
 
       const body = [
         `## Cypher Result`,
@@ -152,8 +158,19 @@ export function registerCypherTools(server: McpServer) {
     "reactome_cypher_sample",
     "Return a small sample of nodes for a given label, to inspect shape and typical property values.",
     {
-      label: z.string().min(1).max(200).describe("Node label to sample (e.g. 'Pathway', 'ReactionLikeEvent', 'PhysicalEntity')"),
-      limit: z.number().int().positive().max(50).optional().default(5).describe("Number of nodes to return (default 5, max 50)"),
+      label: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe("Node label to sample (e.g. 'Pathway', 'ReactionLikeEvent', 'PhysicalEntity')"),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(50)
+        .optional()
+        .default(5)
+        .describe("Number of nodes to return (default 5, max 50)"),
     },
     async ({ label, limit }) => {
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(label)) {
@@ -169,7 +186,11 @@ export function registerCypherTools(server: McpServer) {
         `## Sample of \`${label}\` (${rows.length})`,
         "",
         "```json",
-        JSON.stringify(rows.map((r) => r.n), null, 2),
+        JSON.stringify(
+          rows.map(r => r.n),
+          null,
+          2
+        ),
         "```",
       ];
 

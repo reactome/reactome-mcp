@@ -32,15 +32,22 @@ function formatPathway(pathway: Pathway | Event): string {
     lines.push(`**Has diagram:** Yes`);
   }
 
-  if ("summation" in pathway && pathway.summation && pathway.summation.length > 0) {
-    lines.push("", "### Summary:", pathway.summation[0].text);
+  const summary = "summation" in pathway ? pathway.summation?.[0]?.text : undefined;
+  if (summary) {
+    lines.push("", "### Summary:", summary);
   }
 
-  if ("literatureReference" in pathway && pathway.literatureReference && pathway.literatureReference.length > 0) {
+  if (
+    "literatureReference" in pathway &&
+    pathway.literatureReference &&
+    pathway.literatureReference.length > 0
+  ) {
     lines.push("", "### References:");
     pathway.literatureReference.slice(0, 5).forEach(ref => {
       if (ref.pubMedIdentifier) {
-        lines.push(`- [${ref.displayName}](https://pubmed.ncbi.nlm.nih.gov/${ref.pubMedIdentifier})`);
+        lines.push(
+          `- [${ref.displayName}](https://pubmed.ncbi.nlm.nih.gov/${ref.pubMedIdentifier})`
+        );
       } else {
         lines.push(`- ${ref.displayName}`);
       }
@@ -72,7 +79,9 @@ export function registerPathwayTools(server: McpServer) {
       id: z.string().max(2048).describe("Reactome stable ID (e.g., R-HSA-109582) or database ID"),
     },
     async ({ id }) => {
-      const pathway = await contentClient.get<Event>(`/data/query/enhanced/${encodeURIComponent(id)}`);
+      const pathway = await contentClient.get<Event>(
+        `/data/query/enhanced/${encodeURIComponent(id)}`
+      );
       return {
         content: [{ type: "text", text: formatPathway(pathway) }],
       };
@@ -84,16 +93,25 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_top_pathways",
     "Get all top-level (root) pathways for a species. These are the main pathway categories like 'Immune System', 'Metabolism', etc.",
     {
-      species: z.string().max(2048).optional().default("Homo sapiens").describe("Species name or taxonomy ID"),
+      species: z
+        .string()
+        .max(2048)
+        .optional()
+        .default("Homo sapiens")
+        .describe("Species name or taxonomy ID"),
     },
     async ({ species }) => {
-      const pathways = await contentClient.get<Pathway[]>(`/data/pathways/top/${encodeURIComponent(species)}`);
+      const pathways = await contentClient.get<Pathway[]>(
+        `/data/pathways/top/${encodeURIComponent(species)}`
+      );
 
       const lines = [
         `## Top-Level Pathways for ${species}`,
         `**Total:** ${pathways.length}`,
         "",
-        ...pathways.map(p => `- **${p.displayName}** (${p.stId})${p.hasDiagram ? " [has diagram]" : ""}`),
+        ...pathways.map(
+          p => `- **${p.displayName}** (${p.stId})${p.hasDiagram ? " [has diagram]" : ""}`
+        ),
       ];
 
       return {
@@ -110,12 +128,11 @@ export function registerPathwayTools(server: McpServer) {
       id: z.string().max(2048).describe("Reactome stable ID or database ID"),
     },
     async ({ id }) => {
-      const ancestors = await contentClient.get<Event[][]>(`/data/event/${encodeURIComponent(id)}/ancestors`);
+      const ancestors = await contentClient.get<Event[][]>(
+        `/data/event/${encodeURIComponent(id)}/ancestors`
+      );
 
-      const lines = [
-        `## Ancestor Pathways for ${id}`,
-        "",
-      ];
+      const lines = [`## Ancestor Pathways for ${id}`, ""];
 
       ancestors.forEach((branch, i) => {
         if (ancestors.length > 1) {
@@ -142,9 +159,13 @@ export function registerPathwayTools(server: McpServer) {
       id: z.string().max(2048).describe("Pathway stable ID or database ID"),
     },
     async ({ id }) => {
-      const events = await contentClient.get<Event[]>(`/data/pathway/${encodeURIComponent(id)}/containedEvents`);
+      const events = await contentClient.get<Event[]>(
+        `/data/pathway/${encodeURIComponent(id)}/containedEvents`
+      );
 
-      const reactions = events.filter(e => e.schemaClass === "Reaction" || e.schemaClass === "BlackBoxEvent");
+      const reactions = events.filter(
+        e => e.schemaClass === "Reaction" || e.schemaClass === "BlackBoxEvent"
+      );
       const subpathways = events.filter(e => e.schemaClass === "Pathway");
 
       const lines = [
@@ -185,7 +206,11 @@ export function registerPathwayTools(server: McpServer) {
     "Find lower-level pathways that contain a specific entity (protein, gene, compound, etc.).",
     {
       id: z.string().max(2048).describe("Entity stable ID or database ID"),
-      all_forms: z.boolean().optional().default(false).describe("Include all forms of the entity (modified, in complexes, etc.)"),
+      all_forms: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Include all forms of the entity (modified, in complexes, etc.)"),
     },
     async ({ id, all_forms }) => {
       const endpoint = all_forms
@@ -199,7 +224,9 @@ export function registerPathwayTools(server: McpServer) {
         `**Total:** ${pathways.length}`,
         all_forms ? "(including all forms of the entity)" : "",
         "",
-        ...pathways.slice(0, 50).map(p => `- **${p.displayName}** (${p.stId}) - ${p.speciesName || "Unknown species"}`),
+        ...pathways
+          .slice(0, 50)
+          .map(p => `- **${p.displayName}** (${p.stId}) - ${p.speciesName || "Unknown species"}`),
       ];
 
       if (pathways.length > 50) {
@@ -253,10 +280,19 @@ export function registerPathwayTools(server: McpServer) {
       // returns HTTP 500 for "Homo sapiens" but 200 for "9606", so the
       // previous default made this tool fail every time it was called without
       // an explicit species.
-      species: z.string().max(2048).optional().default("9606").describe("Species taxonomy ID (e.g. 9606). Names are accepted by the API but are unreliable here -- prefer the ID."),
+      species: z
+        .string()
+        .max(2048)
+        .optional()
+        .default("9606")
+        .describe(
+          "Species taxonomy ID (e.g. 9606). Names are accepted by the API but are unreliable here -- prefer the ID."
+        ),
     },
     async ({ species }) => {
-      const hierarchy = await contentClient.get<EventHierarchy[]>(`/data/eventsHierarchy/${encodeURIComponent(species)}`);
+      const hierarchy = await contentClient.get<EventHierarchy[]>(
+        `/data/eventsHierarchy/${encodeURIComponent(species)}`
+      );
 
       const lines = [
         `## Events Hierarchy for ${species}`,
@@ -274,7 +310,10 @@ export function registerPathwayTools(server: McpServer) {
         lines.push(`... and ${hierarchy.length - 3} more top-level pathways`);
       }
 
-      lines.push("", "*Note: Use reactome_pathway_contained_events for detailed exploration of specific pathways.*");
+      lines.push(
+        "",
+        "*Note: Use reactome_pathway_contained_events for detailed exploration of specific pathways.*"
+      );
 
       return {
         content: [{ type: "text", text: lines.join("\n") }],
