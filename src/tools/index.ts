@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { nonEmptyString } from "../schemas.js";
 import { contentClient } from "../clients/content.js";
 import type { Species, Disease, Pathway } from "../types/index.js";
 
@@ -154,7 +155,7 @@ function registerUtilityTools(server: McpServer) {
         .string()
         .max(2048)
         .describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
-      identifier: z.string().max(2048).describe("External identifier"),
+      identifier: nonEmptyString.describe("External identifier"),
     },
     async ({ resource, identifier }) => {
       const pathways = await contentClient.get<Pathway[]>(
@@ -189,7 +190,7 @@ function registerUtilityTools(server: McpServer) {
         .string()
         .max(2048)
         .describe("Database name (e.g., 'UniProt', 'NCBI', 'Ensembl', 'ChEBI')"),
-      identifier: z.string().max(2048).describe("External identifier"),
+      identifier: nonEmptyString.describe("External identifier"),
     },
     async ({ resource, identifier }) => {
       interface Reaction {
@@ -225,8 +226,8 @@ function registerUtilityTools(server: McpServer) {
     "reactome_orthology",
     "Get orthologous events or entities in a different species.",
     {
-      id: z.string().max(2048).describe("Reactome stable ID of an event or entity"),
-      species: z.string().max(2048).describe("Target species (taxonomy ID or name)"),
+      id: nonEmptyString.describe("Reactome stable ID of an event or entity"),
+      species: nonEmptyString.describe("Target species (taxonomy ID or name)"),
     },
     async ({ id, species }) => {
       interface OrthologyResult {
@@ -258,7 +259,7 @@ function registerUtilityTools(server: McpServer) {
     "reactome_query",
     "Query any Reactome database object by its identifier. Returns detailed information about the object.",
     {
-      id: z.string().max(2048).describe("Reactome stable ID or database ID"),
+      id: nonEmptyString.describe("Reactome stable ID or database ID"),
       attribute: z
         .string()
         .max(2048)

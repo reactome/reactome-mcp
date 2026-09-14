@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { nonEmptyString } from "../schemas.js";
 import { contentClient } from "../clients/content.js";
 import type { Pathway, Event } from "../types/index.js";
 
@@ -76,7 +77,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_get_pathway",
     "Get detailed information about a specific pathway or reaction by its Reactome ID.",
     {
-      id: z.string().max(2048).describe("Reactome stable ID (e.g., R-HSA-109582) or database ID"),
+      id: nonEmptyString.describe("Reactome stable ID (e.g., R-HSA-109582) or database ID"),
     },
     async ({ id }) => {
       const pathway = await contentClient.get<Event>(
@@ -125,7 +126,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_pathway_ancestors",
     "Get the ancestor pathway hierarchy for an event (pathway or reaction). Shows how a pathway fits into the broader Reactome structure.",
     {
-      id: z.string().max(2048).describe("Reactome stable ID or database ID"),
+      id: nonEmptyString.describe("Reactome stable ID or database ID"),
     },
     async ({ id }) => {
       const ancestors = await contentClient.get<Event[][]>(
@@ -156,7 +157,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_pathway_contained_events",
     "Get all events (sub-pathways and reactions) contained within a pathway.",
     {
-      id: z.string().max(2048).describe("Pathway stable ID or database ID"),
+      id: nonEmptyString.describe("Pathway stable ID or database ID"),
     },
     async ({ id }) => {
       const events = await contentClient.get<Event[]>(
@@ -205,7 +206,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_pathways_for_entity",
     "Find lower-level pathways that contain a specific entity (protein, gene, compound, etc.).",
     {
-      id: z.string().max(2048).describe("Entity stable ID or database ID"),
+      id: nonEmptyString.describe("Entity stable ID or database ID"),
       all_forms: z
         .boolean()
         .optional()
@@ -244,7 +245,7 @@ export function registerPathwayTools(server: McpServer) {
     "reactome_diagram_pathways_for_entity",
     "Find pathways with diagrams that contain a specific entity. Useful for visualization.",
     {
-      id: z.string().max(2048).describe("Entity stable ID or database ID"),
+      id: nonEmptyString.describe("Entity stable ID or database ID"),
       all_forms: z.boolean().optional().default(false).describe("Include all forms of the entity"),
     },
     async ({ id, all_forms }) => {

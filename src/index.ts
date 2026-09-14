@@ -1,23 +1,15 @@
 #!/usr/bin/env node
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerAllTools } from "./tools/index.js";
-import { registerAllResources } from "./resources/index.js";
+import { createServer } from "./server.js";
 import { logger } from "./logger.js";
 import { CONTENT_SERVICE_URL, ANALYSIS_SERVICE_URL, NEO4J_URI } from "./config.js";
-import { buildServerInstructions } from "./instructions.js";
 import { fetchGraphSchema } from "./graph/schema.js";
 
-const server = new McpServer(
-  { name: "reactome", version: "1.4.0" },
-  { instructions: buildServerInstructions() }
-);
-
-registerAllTools(server);
-registerAllResources(server);
-
 async function main() {
+  // Built here rather than at module scope, so importing this file does not
+  // construct a server as a side effect.
+  const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   logger.info("reactome mcp server started", {
