@@ -70,6 +70,7 @@ const TOOL_ARGS = {
   reactome_search_spellcheck: { query: "kinse" },
   // GSA wants the species NAME; a taxonomy id returns zero results silently.
   reactome_gsa_search_datasets: { keywords: "melanoma", species: "Homo sapiens" },
+  reactome_preceding_events: { id: "R-HSA-69205", depth: 2 },
   reactome_psicquic_summary: { resource: "IntAct", accession: "P04637" },
   reactome_psicquic_details: { resource: "IntAct", accession: "P04637" },
 };
@@ -118,6 +119,9 @@ const EXPECT = {
   reactome_gsa_search_datasets: ["Homo sapiens"],
   reactome_gsa_examples: ["EXAMPLE_"],
   reactome_gsa_sources: ["Expression Atlas"],
+  // An event with curated ordering; many events legitimately have none, so a
+  // tool that only ever says "nothing precedes this" would look healthy.
+  reactome_preceding_events: ["step back", "R-HSA-"],
 };
 
 /**

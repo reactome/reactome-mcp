@@ -15,6 +15,7 @@ All notable changes to this project are documented here. This project adheres to
 - `fetchWithRetry` rethrew `lastError`, typed `unknown`, so a non-`Error` rejection reached callers as something they could not read `.message` off.
 
 ### Added
+- **`reactome_preceding_events`** — what has to happen before a reaction or pathway, walked back several steps. Reactome models ordering on the *later* event, so this traverses `precedingEvent`; the forward direction is not symmetrically available (`followingEvent` appears only nested, as bare dbIds with no stable IDs). Containment was already covered by `reactome_pathway_contained_events` — "what is this pathway made of" — and ordering was not: "what leads up to this". Harvested from [reactome_chatbot#153](https://github.com/reactome/reactome_chatbot/pull/153) by @bhavyakeerthi3, which built a separate Content Service client inside the chatbot to do it. An event with nothing before it says so plainly, because an entry point is a real answer rather than a failed lookup.
 - **ReactomeGSA tools** — `reactome_gsa_methods`, `reactome_gsa_data_types`, `reactome_gsa_search_datasets`, `reactome_gsa_examples`, `reactome_gsa_sources`. Reactome has **two** analysis services and this server only knew about one:
 
   | | | |

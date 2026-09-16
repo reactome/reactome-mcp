@@ -285,6 +285,88 @@ export function registerPathwayTools(server: McpServer) {
     }
   );
 
+  // What has to happen before this event
+  server.tool(
+    "reactome_preceding_events",
+    "Find the events that must occur before a given reaction or pathway — Reactome's " +
+      "event ordering. Use for mechanistic questions about sequence: what leads up to " +
+      "this, what triggers it, what comes earlier in the cascade. Walks back several " +
+      "steps, so it answers 'what is upstream of X' rather than only 'what is one step " +
+      "before X'. This is ordering, not containment: for what a pathway is made of, use " +
+      "reactome_pathway_contained_events.",
+    {
+      id: nonEmptyString.describe("Stable ID of a reaction or pathway, e.g. R-HSA-69205"),
+      depth: z
+        .number()
+        .int()
+        .min(1)
+        .max(5)
+        .optional()
+        .default(2)
+        .describe("How many steps back to walk (default 2). Each step multiplies the work."),
+    },
+    async ({ id, depth }) => {
+      // Reactome models ordering on the *later* event: an event lists what
+      // precedes it. The forward direction is not symmetrically available --
+      // `followingEvent` appears only nested, as bare dbIds with no stable IDs
+      // -- so this walks backwards, which is the direction the data supports.
+      const seen = new Set<string>([id]);
+      const levels: Array<Array<{ stId: string; displayName: string; schemaClass?: string }>> = [];
+      let frontier = [id];
+
+      for (let step = 0; step < depth && frontier.length > 0; step++) {
+        const found: Array<{ stId: string; displayName: string; schemaClass?: string }> = [];
+        for (const current of frontier) {
+          const event = await contentClient.get<{
+            precedingEvent?: Array<{ stId?: string; displayName?: string; schemaClass?: string }>;
+          }>(`/data/query/${encodeURIComponent(current)}`);
+
+          for (const preceding of event.precedingEvent ?? []) {
+            // A stable ID is what makes the answer usable; entries without one
+            // cannot be followed up and are not worth rendering.
+            if (!preceding.stId || seen.has(preceding.stId)) continue;
+            seen.add(preceding.stId);
+            found.push({
+              stId: preceding.stId,
+              displayName: preceding.displayName ?? preceding.stId,
+              schemaClass: preceding.schemaClass,
+            });
+          }
+        }
+        if (found.length === 0) break;
+        levels.push(found);
+        frontier = found.map(f => f.stId);
+      }
+
+      const lines = [`## What happens before ${id}`, ""];
+
+      if (levels.length === 0) {
+        lines.push(
+          "*Nothing precedes this event in Reactome.*",
+          "",
+          "That is a real answer, not a lookup failure: many events are entry points,",
+          "and Reactome only records ordering where it is curated."
+        );
+      } else {
+        levels.forEach((level, index) => {
+          lines.push(`### ${index + 1} step${index === 0 ? "" : "s"} back`);
+          for (const event of level) {
+            lines.push(
+              `- **${event.displayName}** (${event.stId})` +
+                (event.schemaClass ? ` [${event.schemaClass}]` : "")
+            );
+          }
+          lines.push("");
+        });
+        lines.push(
+          `Ordering runs earliest-last: the deepest level above is furthest upstream of ${id}.`
+        );
+      }
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+  );
+
   // Get full events hierarchy
   server.tool(
     "reactome_events_hierarchy",
