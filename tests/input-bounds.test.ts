@@ -94,12 +94,13 @@ const ABSURD = Array.from({ length: 100_001 }, () => "R-HSA-109582");
 const ONE = ["R-HSA-109582"];
 
 describe("tool input bounds", () => {
-  it("covers every tool in every configuration, including Cypher", async () => {
+  it("covers every tool, and the set does not change with the environment", async () => {
     const schemas = await allSchemas();
-    // Without this the sweep would pass vacuously against an empty map, and
-    // without the Cypher names it would pass while missing three tools.
-    expect(schemas.size).toBe(62);
-    expect([...schemas.keys()].filter(n => n.startsWith("reactome_cypher"))).toHaveLength(3);
+    // Without this the sweep would pass vacuously against an empty map. The
+    // exact count is asserted rather than a floor, so a tool that appears
+    // only under some environment shows up here as a number that moved.
+    expect(schemas.size).toBe(59);
+    expect([...schemas.keys()].filter(n => n.includes("cypher"))).toEqual([]);
   });
 
   it("has no argument anywhere that accepts an unbounded list", async () => {

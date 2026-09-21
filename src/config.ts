@@ -61,28 +61,20 @@ export const RESOURCE_TYPES = [
 
 export const DIAGRAM_FORMATS = ["png", "jpg", "jpeg", "svg", "gif"] as const;
 
-export const NEO4J_URI = process.env.NEO4J_URI;
-export const NEO4J_USER = process.env.NEO4J_USER ?? "neo4j";
-export const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD ?? "neo4j";
-export const NEO4J_DATABASE = process.env.NEO4J_DATABASE ?? "graph.db";
-
 /**
- * Whether the Cypher tools may be registered at all.
+ * There is no Neo4j configuration here, deliberately.
  *
- * Default-deny, and deliberately a separate switch from `NEO4J_URI`.
+ * Constitution Principle IV said the server holds no Neo4j connection in any
+ * deployment the team runs, and enforced it with a gate. On 2026-09-21 the
+ * gate was removed along with the graph tools: this server is hosted
+ * publicly, and neither consumer needed it. The chatbot queries the graph
+ * directly with its own driver when it builds embeddings, and the website
+ * needs the REST-backed tools only.
  *
- * Until 2026-09-21 the Cypher tools appeared whenever `NEO4J_URI` was set,
- * which made "can the public run arbitrary graph queries" a side effect of a
- * connection string rather than a decision. That is the wrong shape for this
- * particular capability: a deployment might set `NEO4J_URI` for any number of
- * good reasons -- the graph-schema warm-up, a future non-Cypher graph tool --
- * and would silently publish `reactome_cypher_query` by doing so.
- *
- * So it is an opt-in. Forgetting it costs a missing tool on an internal
- * instance, which is visible and harmless. Forgetting the inverse would have
- * cost arbitrary query access on a public one.
+ * `NEO4J_URI`, `MCP_ALLOW_CYPHER` and the rest are now inert -- setting them
+ * does nothing, because nothing reads them and no code path opens a
+ * connection. `tests/no-graph-access.test.ts` keeps that true.
  */
-export const ALLOW_CYPHER_TOOLS = process.env.MCP_ALLOW_CYPHER === "1";
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
@@ -90,11 +82,6 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(n)) return fallback;
   return n;
 }
-
-export const CYPHER_QUERY_TIMEOUT_MS = parsePositiveInt(
-  process.env.CYPHER_QUERY_TIMEOUT_MS,
-  30_000
-);
 
 /**
  * Backstop on how much text one tool may return.

@@ -1,5 +1,3 @@
-import { isCypherEnabled } from "./clients/neo4j.js";
-
 const CORE_INSTRUCTIONS = `
 This server exposes the Reactome pathway knowledgebase (https://reactome.org) to LLM clients. Reactome is a manually curated, peer-reviewed database of biological pathways: reactions grouped into pathways grouped into hierarchies, annotated with participants (proteins, complexes, small molecules), regulation, literature, species, and disease.
 
@@ -33,28 +31,10 @@ This server exposes the Reactome pathway knowledgebase (https://reactome.org) to
 - \`reactome://pathway/{id}\`, \`reactome://entity/{id}\`, \`reactome://analysis/{token}\` — templated.
 `.trim();
 
-const CYPHER_INSTRUCTIONS = `
-# Graph database (Cypher) — enabled
-
-A local Neo4j Reactome graph is available. Use it when the user wants a query that the REST API does not expose — e.g. arbitrary graph traversals, complex relational joins, aggregate counts across labels.
-
-**Workflow for Cypher:**
-
-1. Call \`reactome_cypher_schema\` (or read the \`reactome://graph/schema\` resource) **before writing any query**. The schema tool returns labels with node counts, relationship cardinalities, per-label and per-rel property types (with mandatory flags), indexes, and constraints. Pulled live via APOC on first use and cached in-memory for the session (warm after the MCP's startup prefetch). Never guess the schema.
-2. Use \`reactome_cypher_sample\` on a label to see a representative node's shape.
-3. Write a Cypher query with \`reactome_cypher_query\`. Rules:
-   - Sessions run in READ mode; write clauses will be rejected.
-   - APOC procedures that can write (\`apoc.cypher.runWrite\`, \`apoc.periodic.*\`, \`apoc.create/merge/refactor.*\`, \`apoc.load/import/export.*\`, \`apoc.trigger.*\`, \`apoc.nodes.delete\`) are pre-rejected — don't try them.
-   - Always include a \`LIMIT\`. The tool caps rows, row width, and total response size, but short queries are faster and cheaper.
-   - Project specific fields (\`RETURN n.stId, n.displayName\`) rather than whole nodes when you don't need every property.
-
-**When NOT to use Cypher:** for lookups by ID or name, pathway hierarchies, or enrichment — the REST tools are faster, cached, and do the formatting for you.
-`.trim();
-
 export function buildServerInstructions(): string {
-  const parts = [CORE_INSTRUCTIONS];
-  // Not `isNeo4jConfigured()`: with a connection but no opt-in the tools this
-  // section tells the client to call do not exist.
-  if (isCypherEnabled()) parts.push(CYPHER_INSTRUCTIONS);
-  return parts.join("\n\n");
+  // One section, unconditionally. There used to be a Cypher section appended
+  // when a graph connection was configured, and it was the surface that got
+  // left behind when the tools were gated -- a server describing tools it had
+  // not registered. Both are gone.
+  return CORE_INSTRUCTIONS;
 }

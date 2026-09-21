@@ -4,6 +4,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Removed
+
+- **BREAKING: all graph database access.** The three `reactome_cypher_*` tools, the `reactome://graph/schema` resource, the Cypher section of the server instructions, the startup schema prefetch and the `neo4j-driver` dependency are gone. `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `CYPHER_QUERY_TIMEOUT_MS` and `MCP_ALLOW_CYPHER` are inert — nothing reads them.
+
+  **Who this affects:** a curator running this server locally over stdio against `reactome_neo4j_env`, which is who the tools were built for. There is no replacement in this server; query the graph directly, as the Reactome chatbot does with its own driver when it builds embeddings.
+
+  **Why now.** This server is being hosted publicly, behind the website's nginx. Constitution Principle IV already said no deployment holds a Neo4j connection, and enforced it with a gate — which made the property true of a *configuration* rather than of the code. The gate was consulted in four places and one of them, `src/http-server.ts`, the entrypoint that actually runs in the hosted deployment, still opened a connection on `NEO4J_URI` alone after the other three were corrected. Neither consumer of this server needed graph access in the first place.
+
+  The public tool surface is **unchanged at 59** — the Cypher tools were only ever the 60th to 62nd, and only with both switches on.
+
+  `tests/no-graph-access.test.ts` asserts the absence with the old switches turned **on**, so it cannot pass by being configured off.
+
 ### Fixed
 - **Ten tools read field paths the Reactome services never return.** Each called the right endpoint and reported success, so nothing flagged them: `contentClient.get<T>` asserts `T`, it does not verify it, and 51 of 56 tools had no test. `search_suggest` and `search_spellcheck` expected `{suggestions: []}` where the API returns a bare array; `entity_component_of` expected `Complex` objects where the API returns one entry per relationship type with parallel `names`/`stIds`/`schemaClasses` arrays; `participants` expected `stId` where the API returns `peDbId`; the four interactor tools read `score` one level above where it lives, throwing on `.toFixed`; `analysis_found_entities` read `mapsTo[].identifier` where the API returns `ids[]`. **`search_diagram` had never returned an answer** — it shared the grouped-results helper, but that endpoint returns a flat `entries` array, so every call threw `result.results is not iterable`.
 - **Two tools dropped data silently, with no `undefined` to give it away.** `participants` never rendered external identifiers at all — the endpoint returns `refEntities` (an array), never a singular `referenceEntity`, so UniProt accessions were simply absent. `search_facets` returned nothing but its heading: each facet is an object with an `available` list, so `.length` on it was `undefined` and every section was skipped as falsy.

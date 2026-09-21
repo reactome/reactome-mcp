@@ -13,7 +13,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - **Species & disease** — list available species and disease annotations
 - **ID mapping** — map external identifiers (UniProt, Ensembl, CHEBI, etc.) to Reactome pathways and reactions
 
-Over 40 tools and 10 resources are registered — see [Tools](#tools) and [Resources](#resources) below for the full list. Curators can additionally opt in to direct **Cypher / Neo4j** access against a local Reactome graph database (see [Graph Database / Cypher](#graph-database--cypher-3-tools-opt-in)).
+59 tools and 10 resources are registered — see [Tools](#tools) and [Resources](#resources) below for the full list. `tests/readme-tools.test.ts` fails if that count drifts or a tool goes undocumented.
 
 ## Prerequisites
 
@@ -36,11 +36,6 @@ All configuration is via environment variables — pass them in the `env` block 
 | `REACTOME_BASE_URL` | `https://reactome.org` | Base URL for the Content + Analysis Services. Override to point at staging / a specific release host. |
 | `REACTOME_CONTENT_SERVICE_URL` | derived from `REACTOME_BASE_URL` | Fine-grained override for the Content Service only. |
 | `REACTOME_ANALYSIS_SERVICE_URL` | derived from `REACTOME_BASE_URL` | Fine-grained override for the Analysis Service only. |
-| `NEO4J_URI` | _(unset)_ | Set to enable the optional Cypher tools (see below). |
-| `NEO4J_USER` | `neo4j` | |
-| `NEO4J_PASSWORD` | `neo4j` | Works against auth-disabled local images (`reactome_neo4j_env`). Set explicitly for any remote database. |
-| `NEO4J_DATABASE` | `graph.db` | Matches the default in `reactome_neo4j_env`. |
-| `CYPHER_QUERY_TIMEOUT_MS` | `30000` | Server-side transaction timeout (ms) for `reactome_cypher_*` tools. Runaway queries are terminated after this. |
 | `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. Logs are JSON on stderr; stdout is reserved for the MCP protocol. |
 
 ## Usage
@@ -66,8 +61,6 @@ Add the server to your Claude Desktop configuration (`claude_desktop_config.json
 claude mcp add reactome node /absolute/path/to/reactome-mcp/dist/index.js
 ```
 
-Add `--env NEO4J_URI=bolt://localhost:7687` (and friends) to enable the Cypher tools. See [Configuration](#configuration) for the full list.
-
 ### Example prompts
 
 Once the server is registered, try asking Claude:
@@ -80,12 +73,6 @@ Once the server is registered, try asking Claude:
 - "I have these UniProt IDs: P04637, P53350, Q9UPN9, Q9Y243. Run a Reactome pathway enrichment and list the top 10 hits by FDR."
 - "Find pathways in the HHV8 infection area and show me the contained reactions of the best match."
 - "Export the SBGN for pathway R-HSA-1640170."
-
-**Graph queries (requires `NEO4J_URI`):**
-
-- "Show me the Reactome graph schema, then find all `Pathway` nodes that are disease pathways *and* have a human species annotation."
-- "Using the graph DB: for reaction R-HSA-199420, list every input and output entity with its display name and stable ID."
-- "Count how many `ReactionLikeEvent` nodes exist per species."
 
 Claude reads per-server instructions on connection explaining the tool categories, ID conventions, and a recommended workflow, so it can usually chain the right calls without hand-holding. If an answer looks off, ask it to "show me the tool call and its result" and correct from there.
 
@@ -129,7 +116,7 @@ Starts a local web UI with an MCP bridge for browser-based exploration.
 | `reactome_analysis_pathway_sizes` | Get pathway size distribution from an analysis result |
 | `reactome_filter_analysis_pathways` | Filter an analysis result to specific pathways |
 
-### Pathways (7 tools)
+### Pathways (8 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -140,6 +127,7 @@ Starts a local web UI with an MCP bridge for browser-based exploration.
 | `reactome_pathways_for_entity` | Find pathways containing a specific entity |
 | `reactome_diagram_pathways_for_entity` | Find diagram-level pathways containing an entity |
 | `reactome_events_hierarchy` | Get the complete event hierarchy for a species |
+| `reactome_preceding_events` | Find the events that must occur before a reaction or pathway — Reactome's event ordering |
 
 ### Search (7 tools)
 
@@ -191,39 +179,15 @@ Starts a local web UI with an MCP bridge for browser-based exploration.
 | `reactome_interactor_pathways` | Find pathways where a protein's interactors appear |
 | `reactome_interactor_summary` | Summarise curated interactions for a protein |
 
-### Graph Database / Cypher (3 tools, opt-in)
-
-Only registered when `NEO4J_URI` is set. Designed for curators running the [`reactome_neo4j_env`](https://github.com/reactome/reactome_neo4j_env) Docker image locally (or pointing at a remote Reactome Neo4j).
+### Gene Set Analysis / ReactomeGSA (5 tools)
 
 | Tool | Description |
 |------|-------------|
-| `reactome_cypher_query` | Run a Cypher query with optional parameters; row count, per-row size, and total response size are all capped; a server-side timeout terminates runaway queries |
-| `reactome_cypher_schema` | Live APOC introspection: labels with node counts, relationship cardinalities, per-label and per-rel property types (with mandatory flags), indexes, constraints. Cached for the session after first call; pre-warmed at MCP startup. |
-| `reactome_cypher_sample` | Return a small sample of nodes for a given label |
-
-**Read-only posture — what it is and isn't.** Sessions run in Neo4j READ mode, which rejects native write clauses (`CREATE`, `MERGE`, `DELETE`, `SET`, `REMOVE`). On top of that, `reactome_cypher_query` rejects APOC procedures that can write or reach outside the graph through back-channels (`apoc.cypher.runWrite` / `apoc.cypher.doIt`, `apoc.periodic.*`, `apoc.create/merge/refactor.*`, `apoc.load/import/export.*`, `apoc.trigger.*`, `apoc.nodes.delete`). Treat this as a guardrail against accidental mutation, not a security boundary — a real trust boundary should live at the Neo4j RBAC / plugin configuration layer, or by pointing at a read-only replica.
-
-**Configuration** (add to your Claude MCP config `env` block):
-
-```json
-{
-  "mcpServers": {
-    "reactome": {
-      "command": "node",
-      "args": ["/absolute/path/to/reactome-mcp/dist/index.js"],
-      "env": {
-        "NEO4J_URI": "bolt://localhost:7687",
-        "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "neo4j",
-        "NEO4J_DATABASE": "graph.db",
-        "CYPHER_QUERY_TIMEOUT_MS": "30000"
-      }
-    }
-  }
-}
-```
-
-`NEO4J_USER` / `NEO4J_PASSWORD` default to `neo4j` / `neo4j` (which works when the server has auth disabled, as in `reactome_neo4j_env`). `NEO4J_DATABASE` defaults to `graph.db`. `CYPHER_QUERY_TIMEOUT_MS` defaults to 30000 ms.
+| `reactome_gsa_methods` | List the gene set analysis methods ReactomeGSA offers (PADOG, Camera, ssGSEA, terapadog) |
+| `reactome_gsa_data_types` | List the kinds of experimental data ReactomeGSA can analyse (RNA-seq counts, normalised RNA-seq, proteomics, microarray, Ribo-seq) |
+| `reactome_gsa_search_datasets` | Search public expression datasets ReactomeGSA can load — Expression Atlas, Single Cell Expression Atlas, GREIN, GEO |
+| `reactome_gsa_examples` | List the bundled example datasets |
+| `reactome_gsa_sources` | List the external dataset sources ReactomeGSA can load from |
 
 ### Utilities (7 tools)
 

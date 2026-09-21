@@ -22,10 +22,14 @@ session and a second transport from the same registrations — neither is possib
 while the only instance is a module-scope constant. The idea is harvested from
 #5 by @adidev001.
 
-**No Neo4j from a deployed instance.** Graph tools stay behind the `NEO4J_URI`
-gate, off by default, and a hosted instance does not set it. A public endpoint
+**No Neo4j from a deployed instance.** Superseded 2026-09-21 by something
+stronger: the graph tools were removed outright, along with the schema resource
+and the `neo4j-driver` dependency, so there is no gate to hold. A public endpoint
 holding database credentials is a different security proposition from one that
-can only make the calls a browser can. A test asserts the gate holds.
+can only make the calls a browser can — and a gate makes that a property of the
+configuration, which is how `src/http-server.ts` came to keep opening a
+connection on `NEO4J_URI` alone after the other call sites were fixed.
+`tests/no-graph-access.test.ts` asserts the absence with the old switches on.
 
 **Analysis runs in the Analysis Service.** The server submits identifiers, holds
 the token, and formats the reply.

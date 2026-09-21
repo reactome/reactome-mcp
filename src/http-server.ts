@@ -11,8 +11,7 @@
  */
 import { startHttpServer } from "./http.js";
 import { logger } from "./logger.js";
-import { MCP_HTTP_PORT, MCP_HTTP_HOST, NEO4J_URI } from "./config.js";
-import { fetchGraphSchema } from "./graph/schema.js";
+import { MCP_HTTP_PORT, MCP_HTTP_HOST } from "./config.js";
 
 const port = MCP_HTTP_PORT;
 
@@ -23,21 +22,9 @@ if (!port) {
   process.exit(1);
 }
 
-startHttpServer(port, MCP_HTTP_HOST)
-  .then(() => {
-    // Same warm-up the stdio entrypoint does: apoc.meta.schema() samples 3M
-    // nodes and takes 15-30s, so the first caller should not pay for it.
-    if (NEO4J_URI) {
-      fetchGraphSchema().catch((err: unknown) => {
-        logger.warn("graph schema prefetch failed; will retry on first use", {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
-    }
-  })
-  .catch((error: unknown) => {
-    logger.error("fatal error starting http server", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    process.exit(1);
+startHttpServer(port, MCP_HTTP_HOST).catch((error: unknown) => {
+  logger.error("fatal error starting http server", {
+    error: error instanceof Error ? error.message : String(error),
   });
+  process.exit(1);
+});
