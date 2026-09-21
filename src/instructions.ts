@@ -1,4 +1,4 @@
-import { isNeo4jConfigured } from "./clients/neo4j.js";
+import { isCypherEnabled } from "./clients/neo4j.js";
 
 const CORE_INSTRUCTIONS = `
 This server exposes the Reactome pathway knowledgebase (https://reactome.org) to LLM clients. Reactome is a manually curated, peer-reviewed database of biological pathways: reactions grouped into pathways grouped into hierarchies, annotated with participants (proteins, complexes, small molecules), regulation, literature, species, and disease.
@@ -53,6 +53,8 @@ A local Neo4j Reactome graph is available. Use it when the user wants a query th
 
 export function buildServerInstructions(): string {
   const parts = [CORE_INSTRUCTIONS];
-  if (isNeo4jConfigured()) parts.push(CYPHER_INSTRUCTIONS);
+  // Not `isNeo4jConfigured()`: with a connection but no opt-in the tools this
+  // section tells the client to call do not exist.
+  if (isCypherEnabled()) parts.push(CYPHER_INSTRUCTIONS);
   return parts.join("\n\n");
 }

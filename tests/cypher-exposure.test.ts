@@ -98,3 +98,88 @@ describe("Cypher tool exposure", () => {
     }
   });
 });
+
+/**
+ * The tools were the obvious surface. Two others answer the same question and
+ * were left behind by the first version of this guard: the server's own
+ * instructions, which tell a client Cypher is available and name the tools to
+ * call, and the `reactome://graph/schema` resource, which runs
+ * apoc.meta.schema() for the caller and returns the internal graph model.
+ *
+ * Each of these is asserted in both directions. The absent case alone would
+ * pass against a build that never offers the thing at all.
+ */
+
+async function withEnv<T>(
+  env: Record<string, string | undefined>,
+  body: () => Promise<T>
+): Promise<T> {
+  vi.resetModules();
+  const previous: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(env)) {
+    previous[key] = process.env[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    return await body();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+const CONNECTED_ONLY = { NEO4J_URI: "bolt://localhost:7690", MCP_ALLOW_CYPHER: undefined };
+const OPTED_IN = { NEO4J_URI: "bolt://localhost:7690", MCP_ALLOW_CYPHER: "1" };
+
+async function instructions(env: Record<string, string | undefined>) {
+  return withEnv(env, async () => {
+    const { buildServerInstructions } = await import("../src/instructions.js");
+    return buildServerInstructions();
+  });
+}
+
+describe("server instructions", () => {
+  it("does not advertise Cypher on a connection alone", async () => {
+    const text = await instructions(CONNECTED_ONLY);
+    expect(text).not.toContain("reactome_cypher_query");
+    expect(text).not.toContain("Graph database (Cypher)");
+    // Still a usable server: the core instructions are there.
+    expect(text).toContain("reactome_search");
+  });
+
+  it("advertises Cypher once opted in", async () => {
+    const text = await instructions(OPTED_IN);
+    expect(text).toContain("reactome_cypher_query");
+  });
+});
+
+async function resourceNames(env: Record<string, string | undefined>) {
+  return withEnv(env, async () => {
+    const { registerStaticResources } = await import("../src/resources/static.js");
+    const names: string[] = [];
+    const server = {
+      resource: (...args: unknown[]) => {
+        if (typeof args[0] === "string") names.push(args[0]);
+        return undefined;
+      },
+    };
+    registerStaticResources(server as never);
+    return names;
+  });
+}
+
+describe("graph schema resource", () => {
+  it("is not registered on a connection alone", async () => {
+    const names = await resourceNames(CONNECTED_ONLY);
+    expect(names).not.toContain("reactome://graph/schema");
+    expect(names).toContain("reactome://species");
+  });
+
+  it("is registered once opted in", async () => {
+    const names = await resourceNames(OPTED_IN);
+    expect(names).toContain("reactome://graph/schema");
+  });
+});

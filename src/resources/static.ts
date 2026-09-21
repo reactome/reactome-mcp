@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { contentClient } from "../clients/content.js";
 import type { Species, Disease } from "../types/index.js";
-import { isNeo4jConfigured } from "../clients/neo4j.js";
+import { isCypherEnabled } from "../clients/neo4j.js";
 import { fetchGraphSchema } from "../graph/schema.js";
 
 export function registerStaticResources(server: McpServer) {
@@ -70,8 +70,11 @@ export function registerStaticResources(server: McpServer) {
     };
   });
 
-  // Graph schema (opt-in, requires NEO4J_URI)
-  if (isNeo4jConfigured()) {
+  // Graph schema — the same opt-in as the Cypher tools. It is not a query
+  // surface, but it runs apoc.meta.schema() for the caller and publishes the
+  // internal graph model, so a server told not to offer Cypher should not be
+  // handing this out either.
+  if (isCypherEnabled()) {
     server.resource("reactome://graph/schema", "reactome://graph/schema", async () => {
       const schema = await fetchGraphSchema();
       return {

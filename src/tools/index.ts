@@ -12,11 +12,11 @@ import { registerExportTools } from "./export.js";
 import { registerInteractorTools } from "./interactors.js";
 import { registerGsaTools } from "./gsa.js";
 import { registerCypherTools } from "./cypher.js";
-import { isNeo4jConfigured } from "../clients/neo4j.js";
+import { isCypherEnabled, isNeo4jConfigured } from "../clients/neo4j.js";
 import { logger } from "../logger.js";
 import { withNewRequestContext } from "../context.js";
 import { capToolResult } from "../response-limits.js";
-import { ALLOW_CYPHER_TOOLS, MAX_TOOL_RESPONSE_CHARS } from "../config.js";
+import { MAX_TOOL_RESPONSE_CHARS } from "../config.js";
 
 /**
  * Wrap `server.tool` so every handler runs inside a fresh request context.
@@ -69,7 +69,7 @@ export function registerAllTools(server: McpServer) {
   // `NEO4J_URI` alone used to be enough, which made arbitrary query access a
   // side effect of a connection string. A public instance that set it for any
   // other reason would have published `reactome_cypher_query`.
-  if (isNeo4jConfigured() && ALLOW_CYPHER_TOOLS) {
+  if (isCypherEnabled()) {
     registerCypherTools(server);
   } else if (isNeo4jConfigured()) {
     // Said out loud, because an operator who set NEO4J_URI expecting these
