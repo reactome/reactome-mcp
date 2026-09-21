@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { logger } from "../logger.js";
 import { z } from "zod";
 import { nonEmptyString } from "../schemas.js";
 import { contentClient } from "../clients/content.js";
@@ -50,24 +51,107 @@ function installToolWrapper(server: McpServer) {
   };
 }
 
+/**
+ * Every group of tools, and what registers it.
+ *
+ * A group is the unit a deployment can choose to publish. The map is the only
+ * list: `registerAllTools` iterates it rather than naming the registrars
+ * again, so a group cannot be defined here and forgotten at the call site,
+ * and `tests/tool-groups.test.ts` asserts every registered tool belongs to
+ * exactly one group -- a tool that escaped grouping would be unswitchable,
+ * and nobody would notice until it was published somewhere it should not be.
+ */
+export const TOOL_GROUPS = {
+  search: registerSearchTools,
+  pathway: registerPathwayTools,
+  entity: registerEntityTools,
+  analysis: registerAnalysisTools,
+  export: registerExportTools,
+  interactors: registerInteractorTools,
+  gsa: registerGsaTools,
+  utilities: registerUtilityTools,
+} as const satisfies Record<string, (server: McpServer) => void>;
+
+export type ToolGroup = keyof typeof TOOL_GROUPS;
+
+export const ALL_TOOL_GROUPS = Object.keys(TOOL_GROUPS) as ToolGroup[];
+
+/**
+ * Which groups of tools this instance registers, from `MCP_TOOL_GROUPS`.
+ *
+ * Unset registers everything, so a local stdio user is unaffected. A public
+ * deployment names the groups it means to publish.
+ *
+ * **This is a registration switch, not a documentation one.** A tool that is
+ * described nowhere but still answers is exactly the divergence that cost
+ * this repo a public Cypher surface and a server advertising tools it had not
+ * registered: what a server *offers* must be the same fact as what it *says*,
+ * and the only way to be sure is for the unwanted tool not to exist on the
+ * instance.
+ *
+ * **Three cases, deliberately different**, because the dangerous failure is a
+ * restriction that silently becomes "everything":
+ *
+ *     unset            -> all groups (the local default)
+ *     set and empty    -> throws
+ *     set with a typo  -> throws
+ *
+ * An unparseable restriction must never fall back to publishing more than was
+ * asked for. Failing to start is recoverable and loud; quietly serving the
+ * full surface on a public endpoint is neither.
+ *
+ * The environment is read here rather than captured in config.ts, so there is
+ * one copy of the value and it can be exercised directly.
+ */
+export function resolveToolGroups(
+  raw: string | undefined = process.env.MCP_TOOL_GROUPS
+): ToolGroup[] {
+  if (raw === undefined) return ALL_TOOL_GROUPS;
+
+  const requested = raw
+    .split(",")
+    .map(name => name.trim().toLowerCase())
+    .filter(name => name.length > 0);
+
+  if (requested.length === 0) {
+    throw new Error(
+      `MCP_TOOL_GROUPS is set but names no group. Unset it to register everything, ` +
+        `or name groups: ${ALL_TOOL_GROUPS.join(", ")}.`
+    );
+  }
+
+  const unknown = requested.filter(name => !(name in TOOL_GROUPS));
+  if (unknown.length > 0) {
+    throw new Error(
+      `MCP_TOOL_GROUPS names unknown group(s): ${unknown.join(", ")}. ` +
+        `Known groups: ${ALL_TOOL_GROUPS.join(", ")}.`
+    );
+  }
+
+  // Deduplicated, and in the map's order rather than the caller's, so the
+  // registration order does not depend on how the variable was written.
+  return ALL_TOOL_GROUPS.filter(name => requested.includes(name));
+}
+
 export function registerAllTools(server: McpServer) {
   installToolWrapper(server);
-
-  registerAnalysisTools(server);
-  registerPathwayTools(server);
-  registerSearchTools(server);
-  registerEntityTools(server);
-  registerExportTools(server);
-  registerInteractorTools(server);
-  registerGsaTools(server);
 
   // No graph database tools. They were removed on 2026-09-21 when this
   // server became publicly hosted: Constitution Principle IV already said no
   // deployment holds a Neo4j connection, and a gate enforcing that is a gate
   // somebody can flip. Nothing here opens one now.
 
-  // Register utility tools directly here
-  registerUtilityTools(server);
+  const groups = resolveToolGroups();
+  for (const group of groups) TOOL_GROUPS[group](server);
+
+  if (groups.length < ALL_TOOL_GROUPS.length) {
+    const omitted = ALL_TOOL_GROUPS.filter(g => !groups.includes(g));
+    logger.info("registering a subset of tool groups", {
+      registered: groups,
+      omitted,
+      source: "MCP_TOOL_GROUPS",
+    });
+  }
 }
 
 /**

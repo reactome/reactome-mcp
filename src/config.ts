@@ -126,6 +126,16 @@ export const MCP_HTTP_HOST = process.env.MCP_HTTP_HOST ?? "127.0.0.1";
 export const MCP_SESSION_TTL_MS = parsePositiveInt(process.env.MCP_SESSION_TTL_MS, 30 * 60_000);
 
 /** Ceiling on concurrent sessions, so a client loop cannot exhaust memory. */
+/**
+ * `MCP_TOOL_GROUPS` selects which groups of tools an instance registers.
+ *
+ * It is deliberately *not* a constant here. Every other value in this file is
+ * read once at import, which is right for something fixed at boot -- but it
+ * also means a captured copy, and a captured copy is a second place the value
+ * lives. `resolveToolGroups()` in tools/index.ts reads the environment itself,
+ * next to the code that acts on it, and documents the three cases.
+ */
+
 export const MCP_MAX_SESSIONS = parsePositiveInt(process.env.MCP_MAX_SESSIONS, 256);
 
 /**
