@@ -58,10 +58,12 @@ MCP_TOOL_GROUPS=search,pathway,entity,utilities,analysis
 | `gsa` | 5 |
 | `utilities` | 7 |
 
-This is a **registration** switch, not a documentation one: an omitted group's
+This is a **registration** switch, not a documentation one. An omitted group's
 tools are not registered, are not listed by `tools/list`, and are not
-mentioned in the instructions the server sends on connection. A tool that is
-described nowhere but still answers is the failure this avoids.
+mentioned in the instructions the server sends on connection — and **nor are
+its resources**: omitting `analysis` withholds `reactome://analysis/{token}`
+too, because a capability moved to a URI is not a capability withheld. A tool
+described nowhere but still answering is the failure this avoids.
 
 Three cases behave differently on purpose, because the dangerous one is a
 restriction that quietly becomes "everything":

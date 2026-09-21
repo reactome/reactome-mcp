@@ -8,7 +8,7 @@ All notable changes to this project are documented here. This project adheres to
 
 - **`MCP_TOOL_GROUPS` — choose which tools an instance publishes.** All 59 register by default, so a local stdio user is unaffected; a hosted instance names the groups it means to serve (`search`, `pathway`, `entity`, `analysis`, `export`, `interactors`, `gsa`, `utilities`).
 
-  It is a **registration** switch, not a documentation one. An omitted group's tools are not registered, do not appear in `tools/list`, and are not mentioned in the instructions the server sends on connection. A tool described nowhere but still answering is the divergence that let this server advertise Cypher tools it had not registered.
+  It is a **registration** switch, not a documentation one. An omitted group's tools are not registered, do not appear in `tools/list`, are not mentioned in the instructions the server sends on connection, and neither are its **resources** — omitting `analysis` withholds `reactome://analysis/{token}` as well, since a capability moved to a URI is not a capability withheld. A tool described nowhere but still answering is the divergence that let this server advertise Cypher tools it had not registered.
 
   Three cases differ on purpose, because the dangerous failure is a restriction that silently becomes "everything": unset registers all; set-and-empty refuses to start; an unknown group refuses to start and names the typo. Failing to start is loud and recoverable — quietly serving the full surface on a public endpoint is neither.
 

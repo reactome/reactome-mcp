@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerAllTools } from "./tools/index.js";
+import { registerAllTools, resolveToolGroups } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 import { buildServerInstructions } from "./instructions.js";
 
@@ -17,13 +17,20 @@ export const SERVER_VERSION = "1.4.0";
  * stdio entrypoint.
  */
 export function createServer(): McpServer {
+  // Resolved once and passed to all three, rather than each asking the
+  // environment for itself. They would agree today -- they read the same
+  // variable -- but "the same fact, fetched independently in three places"
+  // is precisely the shape that let this server advertise tools it had not
+  // registered, and it agreed right up until it did not.
+  const groups = resolveToolGroups();
+
   const server = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
-    { instructions: buildServerInstructions() }
+    { instructions: buildServerInstructions(groups) }
   );
 
-  registerAllTools(server);
-  registerAllResources(server);
+  registerAllTools(server, groups);
+  registerAllResources(server, groups);
 
   return server;
 }

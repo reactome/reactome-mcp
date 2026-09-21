@@ -19,8 +19,7 @@ __WORKFLOW_STEPS__
 
 # Resources (read via MCP \`resources/read\`)
 
-- \`reactome://species\`, \`reactome://species/main\`, \`reactome://diseases\`, \`reactome://database/info\` — orient yourself at session start.
-- \`reactome://pathway/{id}\`, \`reactome://entity/{id}\`, \`reactome://analysis/{token}\` — templated.
+__RESOURCE_LINES__
 `.trim();
 
 /**
@@ -53,6 +52,25 @@ const WORKFLOW_STEPS: { group: ToolGroup | null; text: string }[] = [
   },
 ];
 
+/**
+ * Resource lines, tied to the group that registers each URI.
+ *
+ * The category list and the workflow steps were made group-aware first, and
+ * this was still prose -- so an instance without `analysis` withheld
+ * `reactome://analysis/{token}` and then listed it here anyway. Found by
+ * widening the drift test from tool names to resource URIs, which is the
+ * fourth place this same divergence has turned up.
+ */
+const RESOURCE_LINES: { group: ToolGroup; text: string }[] = [
+  {
+    group: "utilities",
+    text: "`reactome://species`, `reactome://species/main`, `reactome://diseases`, `reactome://database/info` — orient yourself at session start.",
+  },
+  { group: "pathway", text: "`reactome://pathway/{id}` — templated pathway details." },
+  { group: "entity", text: "`reactome://entity/{id}` — templated entity details." },
+  { group: "analysis", text: "`reactome://analysis/{token}` — templated analysis results." },
+];
+
 const CATEGORY_LINES: Record<ToolGroup, string> = {
   search: `- **Search** (\`reactome_search*\`) — full-text search across pathways, reactions, entities, genes, compounds. Start here when the user gives a free-text term.`,
   pathway: `- **Pathways** (\`reactome_get_pathway\`, \`reactome_top_pathways\`, \`reactome_pathway_ancestors\`, \`reactome_pathway_contained_events\`, \`reactome_events_hierarchy\`, \`reactome_pathways_for_entity\`) — navigate the pathway hierarchy.`,
@@ -83,8 +101,11 @@ export function buildServerInstructions(groups: ToolGroup[] = resolveToolGroups(
     step => step.group === null || groups.includes(step.group)
   ).map((step, i) => `${i + 1}. ${step.text}`);
 
-  return CORE_INSTRUCTIONS.replace("__CATEGORY_LINES__", categoryLines).replace(
-    "__WORKFLOW_STEPS__",
-    steps.join("\n")
+  const resourceLines = RESOURCE_LINES.filter(line => groups.includes(line.group)).map(
+    line => `- ${line.text}`
   );
+
+  return CORE_INSTRUCTIONS.replace("__CATEGORY_LINES__", categoryLines)
+    .replace("__WORKFLOW_STEPS__", steps.join("\n"))
+    .replace("__RESOURCE_LINES__", resourceLines.join("\n"));
 }

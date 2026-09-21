@@ -133,7 +133,7 @@ export function resolveToolGroups(
   return ALL_TOOL_GROUPS.filter(name => requested.includes(name));
 }
 
-export function registerAllTools(server: McpServer) {
+export function registerAllTools(server: McpServer, groups: ToolGroup[] = resolveToolGroups()) {
   installToolWrapper(server);
 
   // No graph database tools. They were removed on 2026-09-21 when this
@@ -141,7 +141,6 @@ export function registerAllTools(server: McpServer) {
   // deployment holds a Neo4j connection, and a gate enforcing that is a gate
   // somebody can flip. Nothing here opens one now.
 
-  const groups = resolveToolGroups();
   for (const group of groups) TOOL_GROUPS[group](server);
 
   if (groups.length < ALL_TOOL_GROUPS.length) {

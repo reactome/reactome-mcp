@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildServerInstructions } from "../src/instructions.js";
+import { registerAllResources, RESOURCE_URIS } from "../src/resources/index.js";
 import {
   ALL_TOOL_GROUPS,
   TOOL_GROUPS,
@@ -113,9 +114,14 @@ describe("instructions match what is registered", () => {
    * drifted just as quietly — which is the whole lesson of the Cypher
    * instructions: the surface that describes the server is a surface.
    */
-  const referencedTools = (text: string): string[] => {
+  // Tool names AND resource URIs. The first version matched only
+  // `reactome_*`, and the instructions also list `reactome://analysis/{token}`
+  // and friends -- so a restricted instance could still have advertised a
+  // resource it withheld, which is the same drift one noun over.
+  const referenced = (text: string): string[] => {
     const found = new Set<string>();
-    for (const match of text.matchAll(/reactome_[a-z_]*\*?/g)) found.add(match[0]);
+    for (const m of text.matchAll(/reactome_[a-z_]*\*?/g)) found.add(m[0]);
+    for (const m of text.matchAll(/reactome:\/\/[a-z-]+(?:\/\{?[a-z]+\}?)*/g)) found.add(m[0]);
     return [...found];
   };
 
@@ -124,20 +130,89 @@ describe("instructions match what is registered", () => {
       ? registered.some(name => name.startsWith(reference.slice(0, -1)))
       : registered.includes(reference);
 
-  it("names no tool the full server does not register", () => {
-    const registered = namesFor(registerAllTools);
-    const dangling = referencedTools(buildServerInstructions(ALL_TOOL_GROUPS)).filter(
+  const registeredNames = (groups: ToolGroup[]): string[] => {
+    const tools = groups.flatMap(g => namesFor(TOOL_GROUPS[g]));
+    const resources: string[] = [];
+    const server = {
+      resource: (...args: unknown[]) => {
+        const uri = typeof args[1] === "string" ? args[1] : undefined;
+        const t = args[1] as { uriTemplate?: { toString(): string } } | undefined;
+        const value = uri ?? t?.uriTemplate?.toString();
+        if (value) resources.push(value);
+        return undefined;
+      },
+    };
+    registerAllResources(server as never, groups);
+    return [...tools, ...resources];
+  };
+
+  it("names no tool or resource the full server does not register", () => {
+    const registered = registeredNames(ALL_TOOL_GROUPS);
+    const dangling = referenced(buildServerInstructions(ALL_TOOL_GROUPS)).filter(
       r => !satisfied(r, registered)
     );
     expect(dangling).toEqual([]);
   });
 
-  it("names no tool a restricted server does not register", () => {
+  it("names no tool or resource a restricted server does not register", () => {
     const groups: ToolGroup[] = ["search", "pathway", "entity", "utilities"];
-    const registered = groups.flatMap(g => namesFor(TOOL_GROUPS[g]));
-    const dangling = referencedTools(buildServerInstructions(groups)).filter(
+    const registered = registeredNames(groups);
+    const dangling = referenced(buildServerInstructions(groups)).filter(
       r => !satisfied(r, registered)
     );
     expect(dangling).toEqual([]);
+  });
+});
+
+describe("resources follow the same switch", () => {
+  const resourceUris = (groups: ToolGroup[]): string[] => {
+    const uris: string[] = [];
+    registerAllResources(
+      {
+        resource: (...args: unknown[]) => {
+          const t = args[1] as { uriTemplate?: { toString(): string } } | undefined;
+          const uri = typeof args[1] === "string" ? args[1] : t?.uriTemplate?.toString();
+          if (uri) uris.push(uri);
+          return undefined;
+        },
+      } as never,
+      groups
+    );
+    return uris;
+  };
+
+  it("registers every known resource when all groups are on", () => {
+    expect([...resourceUris(ALL_TOOL_GROUPS)].sort()).toEqual([...RESOURCE_URIS].sort());
+  });
+
+  it("withholds the resources of an omitted group", () => {
+    // An instance that withholds the analysis *tools* but still serves
+    // reactome://analysis/{token} has not restricted anything; it has moved
+    // the capability to a URI.
+    const uris = resourceUris(["pathway", "utilities"]);
+    expect(uris).not.toContain("reactome://analysis/{token}");
+    expect(uris).not.toContain("reactome://entity/{id}");
+    expect(uris).toContain("reactome://pathway/{id}");
+    expect(uris).toContain("reactome://species");
+  });
+
+  it("refuses a resource that belongs to no group", () => {
+    // Fails loudly rather than defaulting to always-on, so a new resource
+    // cannot escape the switch by nobody remembering it exists.
+    const server = {
+      resource: (...args: unknown[]) => args,
+    };
+    const rogue = {
+      resource: (..._args: unknown[]) => undefined,
+    };
+    void server;
+    expect(() => {
+      registerAllResources(rogue as never, ALL_TOOL_GROUPS);
+      (rogue as { resource: (...a: unknown[]) => unknown }).resource(
+        "rogue",
+        "reactome://not-classified",
+        () => undefined
+      );
+    }).toThrow(/not assigned to a tool group/);
   });
 });
