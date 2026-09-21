@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import type { Request, Response } from "express";
-import express from "express";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -41,7 +40,22 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
   // hosts, which is what stops a web page in the user's browser from driving
   // this server.
   const app = createMcpExpressApp({ host });
-  app.use(express.json({ limit: "4mb" }));
+
+  // No second body parser here. `createMcpExpressApp` mounts `express.json()`
+  // with no limit of its own, so express's 100 KiB default is the real
+  // ceiling, and it is reached first: a parser added afterwards never sees a
+  // request, because body-parser skips a body that has already been read.
+  //
+  // An `express.json({ limit: "4mb" })` sat on this line and did nothing. It
+  // was worse than absent -- it was the number anyone reading this file would
+  // have believed, and it is four times larger than what actually applies.
+  // Measured, not read: 102,392 bytes are accepted and 102,992 are refused
+  // with 413, which is express's `100kb` exactly.
+  //
+  // 100 KiB is not a number anyone here chose, but it is a defensible one for
+  // a public instance, and MAX_ANALYSIS_IDENTIFIERS is set to fit inside it.
+  // `tests/body-limit.test.ts` holds the two together, so an SDK upgrade that
+  // moves this ceiling fails there rather than in production.
 
   const sessions = new Map<string, Session>();
 

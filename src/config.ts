@@ -146,12 +146,22 @@ export const MCP_MAX_SESSIONS = parsePositiveInt(process.env.MCP_MAX_SESSIONS, 2
  *
  * The list is POSTed to the Analysis Service, which does real work and stores
  * a result against a token, so an uncapped list is an amplification: a few
- * bytes of MCP request commissioning an unbounded job. 10,000 is well above a
- * genuine enrichment (a whole human proteome is ~20,000) and far below what
- * makes a useful weapon; raise it on a private instance if a real analysis
- * needs more.
+ * bytes of MCP request commissioning an unbounded job.
+ *
+ * 3,000 is chosen to fit, not for its own sake. The HTTP transport's body
+ * ceiling is express's 100 KiB default (see `startHttpServer`), and a
+ * `tools/call` carrying 3,000 identifiers of 20 characters comes to about
+ * 69 KB -- a third of the ceiling left spare, so a request at this cap gets
+ * a validation error naming the limit rather than a bare 413 from the
+ * transport. A cap the transport refuses to deliver is not a cap, it is two
+ * disagreeing ones. 4,000 was tried first and left only 10% headroom, which
+ * the test rejected: a cap that only just fits is one identifier-length
+ * change away from being unreachable again.
+ *
+ * `tests/body-limit.test.ts` asserts the two still agree. stdio has no such
+ * ceiling, so a private instance that needs a whole proteome can raise this.
  */
 export const MAX_ANALYSIS_IDENTIFIERS = parsePositiveInt(
   process.env.MCP_MAX_ANALYSIS_IDENTIFIERS,
-  10_000
+  3_000
 );
