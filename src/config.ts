@@ -140,3 +140,18 @@ export const MCP_SESSION_TTL_MS = parsePositiveInt(process.env.MCP_SESSION_TTL_M
 
 /** Ceiling on concurrent sessions, so a client loop cannot exhaust memory. */
 export const MCP_MAX_SESSIONS = parsePositiveInt(process.env.MCP_MAX_SESSIONS, 256);
+
+/**
+ * Most identifiers one `reactome_analyze_identifiers` call may submit.
+ *
+ * The list is POSTed to the Analysis Service, which does real work and stores
+ * a result against a token, so an uncapped list is an amplification: a few
+ * bytes of MCP request commissioning an unbounded job. 10,000 is well above a
+ * genuine enrichment (a whole human proteome is ~20,000) and far below what
+ * makes a useful weapon; raise it on a private instance if a real analysis
+ * needs more.
+ */
+export const MAX_ANALYSIS_IDENTIFIERS = parsePositiveInt(
+  process.env.MCP_MAX_ANALYSIS_IDENTIFIERS,
+  10_000
+);

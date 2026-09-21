@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { boundedList, identifierList } from "./limits.js";
 import { z } from "zod";
 import { nonEmptyString } from "../schemas.js";
 import { analysisClient } from "../clients/analysis.js";
@@ -95,9 +96,7 @@ export function registerAnalysisTools(server: McpServer) {
     "reactome_analyze_identifiers",
     "Perform pathway enrichment analysis on a list of gene/protein identifiers. Returns over-represented pathways sorted by p-value.",
     {
-      identifiers: z
-        .array(nonEmptyString)
-        .describe("List of gene symbols, UniProt IDs, or other identifiers"),
+      identifiers: identifierList("List of gene symbols, UniProt IDs, or other identifiers"),
       projection: z.boolean().optional().default(true).describe("Project results to Homo sapiens"),
       interactors: z
         .boolean()
@@ -332,7 +331,7 @@ export function registerAnalysisTools(server: McpServer) {
     "Filter an analysis result to only include specific pathways.",
     {
       token: nonEmptyString.describe("Analysis token"),
-      pathways: z.array(nonEmptyString).describe("List of pathway stable IDs to include"),
+      pathways: boundedList(1_000, "List of pathway stable IDs to include"),
       resource: nonEmptyString.optional().default("TOTAL").describe("Resource filter"),
       p_value: z.number().optional().describe("p-value threshold"),
     },

@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { optionalList } from "./limits.js";
 import { z } from "zod";
 import { nonEmptyString } from "../schemas.js";
 import { contentClient } from "../clients/content.js";
@@ -22,7 +23,7 @@ export function registerExportTools(server: McpServer) {
         .default(5)
         .describe("Quality/scale factor (1-10, higher = larger image)"),
       flag: nonEmptyString.optional().describe("Identifier to highlight/flag in the diagram"),
-      sel: z.array(nonEmptyString).optional().describe("IDs to select/highlight"),
+      sel: optionalList(100, "IDs to select/highlight"),
     },
     async ({ id, format, quality, flag, sel }) => {
       const params = new URLSearchParams();

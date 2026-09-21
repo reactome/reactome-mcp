@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { optionalList } from "./limits.js";
 import { z } from "zod";
 import { contentClient } from "../clients/content.js";
 import { nonEmptyString } from "../schemas.js";
@@ -97,12 +98,9 @@ export function registerSearchTools(server: McpServer) {
       species: nonEmptyString
         .optional()
         .describe("Filter by species (e.g., 'Homo sapiens', 'Mus musculus')"),
-      types: z
-        .array(nonEmptyString)
-        .optional()
-        .describe("Filter by type (Pathway, Reaction, Protein, Gene, Complex, etc.)"),
-      compartments: z.array(nonEmptyString).optional().describe("Filter by cellular compartment"),
-      keywords: z.array(nonEmptyString).optional().describe("Filter by keywords"),
+      types: optionalList(50, "Filter by type (Pathway, Reaction, Protein, Gene, Complex, etc.)"),
+      compartments: optionalList(50, "Filter by cellular compartment"),
+      keywords: optionalList(50, "Filter by keywords"),
       rows: z.number().optional().default(25).describe("Number of results to return"),
       cluster: z.boolean().optional().default(true).describe("Cluster related results"),
     },
@@ -153,7 +151,7 @@ export function registerSearchTools(server: McpServer) {
       page: z.number().optional().default(1).describe("Page number (1-based)"),
       rows_per_page: z.number().optional().default(20).describe("Results per page"),
       species: nonEmptyString.optional().describe("Filter by species"),
-      types: z.array(nonEmptyString).optional().describe("Filter by type"),
+      types: optionalList(50, "Filter by type"),
     },
     async ({ query, page, rows_per_page, species, types }) => {
       const params: Record<string, string | number | boolean | undefined> = {
