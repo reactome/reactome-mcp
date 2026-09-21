@@ -38,6 +38,40 @@ All configuration is via environment variables — pass them in the `env` block 
 | `REACTOME_ANALYSIS_SERVICE_URL` | derived from `REACTOME_BASE_URL` | Fine-grained override for the Analysis Service only. |
 | `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. Logs are JSON on stderr; stdout is reserved for the MCP protocol. |
 
+## Choosing which tools to publish
+
+All 59 tools register by default, which is what you want locally. A hosted
+instance usually wants fewer, so `MCP_TOOL_GROUPS` selects groups:
+
+```
+MCP_TOOL_GROUPS=search,pathway,entity,utilities,analysis
+```
+
+| Group | Tools |
+|-------|-------|
+| `search` | 7 |
+| `pathway` | 8 |
+| `entity` | 8 |
+| `analysis` | 9 |
+| `export` | 9 |
+| `interactors` | 6 |
+| `gsa` | 5 |
+| `utilities` | 7 |
+
+This is a **registration** switch, not a documentation one. An omitted group's
+tools are not registered, are not listed by `tools/list`, and are not
+mentioned in the instructions the server sends on connection — and **nor are
+its resources**: omitting `analysis` withholds `reactome://analysis/{token}`
+too, because a capability moved to a URI is not a capability withheld. A tool
+described nowhere but still answering is the failure this avoids.
+
+Three cases behave differently on purpose, because the dangerous one is a
+restriction that quietly becomes "everything":
+
+- **unset** — all groups
+- **set and empty** — the server refuses to start
+- **set with an unknown name** — the server refuses to start, naming the typo
+
 ## Usage
 
 ### With Claude Desktop

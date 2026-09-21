@@ -22,9 +22,15 @@ if (!port) {
   process.exit(1);
 }
 
-startHttpServer(port, MCP_HTTP_HOST).catch((error: unknown) => {
-  logger.error("fatal error starting http server", {
-    error: error instanceof Error ? error.message : String(error),
+// `Promise.resolve().then(...)` rather than a bare call: startHttpServer
+// validates the tool-group configuration synchronously, so a bad value threw
+// past the .catch below and killed the process with a raw stack trace. Dying
+// was correct; dying without the log line that says why was not.
+Promise.resolve()
+  .then(() => startHttpServer(port, MCP_HTTP_HOST))
+  .catch((error: unknown) => {
+    logger.error("fatal error starting http server", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    process.exit(1);
   });
-  process.exit(1);
-});

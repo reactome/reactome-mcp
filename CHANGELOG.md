@@ -4,6 +4,16 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`MCP_TOOL_GROUPS` — choose which tools an instance publishes.** All 59 register by default, so a local stdio user is unaffected; a hosted instance names the groups it means to serve (`search`, `pathway`, `entity`, `analysis`, `export`, `interactors`, `gsa`, `utilities`).
+
+  It is a **registration** switch, not a documentation one. An omitted group's tools are not registered, do not appear in `tools/list`, are not mentioned in the instructions the server sends on connection, and neither are its **resources** — omitting `analysis` withholds `reactome://analysis/{token}` as well, since a capability moved to a URI is not a capability withheld. A tool described nowhere but still answering is the divergence that let this server advertise Cypher tools it had not registered.
+
+  Three cases differ on purpose, because the dangerous failure is a restriction that silently becomes "everything": unset registers all; set-and-empty refuses to start; an unknown group refuses to start and names the typo. Failing to start is loud and recoverable — quietly serving the full surface on a public endpoint is neither.
+
+  Two tests hold the pieces together: every registered tool belongs to exactly one group (an ungrouped tool could not be switched off, and nobody would find out until it was published somewhere it should not be), and the instructions name no `reactome_*` tool the instance did not register — checked for the full server and for a restricted one, over the whole text rather than just the category list, because the recommended-workflow prose names tools too and drifted exactly that way while this was being written.
+
 ### Removed
 
 - **BREAKING: all graph database access.** The three `reactome_cypher_*` tools, the `reactome://graph/schema` resource, the Cypher section of the server instructions, the startup schema prefetch and the `neo4j-driver` dependency are gone. `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `CYPHER_QUERY_TIMEOUT_MS` and `MCP_ALLOW_CYPHER` are inert — nothing reads them.

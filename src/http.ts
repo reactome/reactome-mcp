@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { resolveToolGroups } from "./tools/index.js";
 import { estimateAnalysisBodyBytes } from "./tools/limits.js";
 import type { Server } from "node:http";
 import type { Request, Response } from "express";
@@ -46,6 +47,16 @@ interface Session {
 const EXPRESS_JSON_LIMIT_BYTES = 102_400;
 
 export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Promise<Server> {
+  // Validate the tool-group configuration *here*, before anything binds.
+  //
+  // `createServer()` is called per session (see the session handler below),
+  // so a bad MCP_TOOL_GROUPS would otherwise let the process start, answer
+  // /health with "ok", and fail every individual session -- while the
+  // documentation said the server refuses to start. It does over stdio,
+  // where createServer runs once at boot. It did not here, which is the
+  // transport that is actually deployed.
+  resolveToolGroups();
+
   // Defaults to 127.0.0.1 and turns on DNS-rebinding protection for localhost
   // hosts, which is what stops a web page in the user's browser from driving
   // this server.
