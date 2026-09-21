@@ -7,14 +7,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createServer, SERVER_NAME, SERVER_VERSION } from "./server.js";
 import { logger } from "./logger.js";
-import { isCypherEnabled } from "./clients/neo4j.js";
 import {
   MCP_HTTP_HOST,
   MCP_MAX_SESSIONS,
   MCP_SESSION_TTL_MS,
   CONTENT_SERVICE_URL,
   ANALYSIS_SERVICE_URL,
-  NEO4J_URI,
   MAX_ANALYSIS_IDENTIFIERS,
 } from "./config.js";
 
@@ -220,8 +218,6 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
       sessions: sessions.size,
       contentService: CONTENT_SERVICE_URL,
       analysisService: ANALYSIS_SERVICE_URL,
-      neo4jEnabled: Boolean(NEO4J_URI),
-      cypherEnabled: isCypherEnabled(),
     });
   });
 
@@ -232,8 +228,6 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
         port,
         contentService: CONTENT_SERVICE_URL,
         analysisService: ANALYSIS_SERVICE_URL,
-        neo4jEnabled: Boolean(NEO4J_URI),
-        cypherEnabled: isCypherEnabled(),
       });
       resolve(http);
     });

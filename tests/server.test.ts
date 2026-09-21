@@ -43,14 +43,23 @@ describe("createServer", () => {
     expect(toolNames).toContain("reactome_analyze_identifiers");
   });
 
-  it("keeps the graph tools behind the NEO4J_URI gate", () => {
-    // Principle IV: no deployment the team runs holds a Neo4j connection.
-    // NEO4J_URI is unset in the test environment, so these must be absent.
-    const server = createServer();
-    const registered = server as unknown as { _registeredTools?: Record<string, unknown> };
-    const toolNames = Object.keys(registered._registeredTools ?? {});
+  it("registers no graph tools, whatever the environment says", () => {
+    // Principle IV, now structural rather than configured: there are no graph
+    // tools to gate. The environment is set to what used to switch them ON,
+    // because a test that unsets it would be asserting the old gate still
+    // works rather than that the tools are gone.
+    process.env.NEO4J_URI = "bolt://localhost:7690";
+    process.env.MCP_ALLOW_CYPHER = "1";
+    try {
+      const server = createServer();
+      const registered = server as unknown as { _registeredTools?: Record<string, unknown> };
+      const toolNames = Object.keys(registered._registeredTools ?? {});
 
-    expect(process.env.NEO4J_URI).toBeFalsy();
-    expect(toolNames).not.toContain("reactome_cypher_query");
+      expect(toolNames.filter(n => n.includes("cypher"))).toEqual([]);
+      expect(toolNames.length).toBeGreaterThan(40);
+    } finally {
+      delete process.env.NEO4J_URI;
+      delete process.env.MCP_ALLOW_CYPHER;
+    }
   });
 });

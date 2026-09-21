@@ -63,12 +63,23 @@ shipped.
 ### IV. Reactome data, through the public services
 
 Tools read the Content Service and the Analysis Service over HTTP. The server
-does not hold a Neo4j connection in any deployment the team runs: graph tools stay
-behind the `NEO4J_URI` gate and stay off by default.
+holds no Neo4j connection, because there is no code that can open one: the Cypher
+tools, the graph schema resource and the `neo4j-driver` dependency were removed on
+2026-09-21.
 
 This is a decision about blast radius, not capability. A public MCP endpoint with
 database credentials is a different security proposition from one that can only
 make the same calls a browser can.
+
+**Why removed rather than gated.** This principle was enforced by a gate, which
+made it a property of a configuration rather than of the code. The gate was
+consulted in four places and one of them — `src/http-server.ts`, the entrypoint
+that actually runs in the hosted deployment — still opened a connection on
+`NEO4J_URI` alone after the other three were corrected. Neither of the two
+consumers needed graph access in any case: the chatbot queries the graph directly
+with its own driver when it builds embeddings, and the website needs the
+REST-backed tools only. `tests/no-graph-access.test.ts` asserts the absence with
+the old switches turned ON, so it cannot pass by being configured off.
 
 ### V. Analysis runs in the service, not in the agent
 
