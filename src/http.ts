@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { estimateAnalysisBodyBytes } from "./tools/limits.js";
 import type { Server } from "node:http";
 import type { Request, Response } from "express";
-import express from "express";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -15,6 +15,7 @@ import {
   CONTENT_SERVICE_URL,
   ANALYSIS_SERVICE_URL,
   NEO4J_URI,
+  MAX_ANALYSIS_IDENTIFIERS,
 } from "./config.js";
 
 interface Session {
@@ -36,12 +37,53 @@ interface Session {
  * shared per-connection state; `createServer()` exists precisely so that
  * building one per session is cheap.
  */
+/**
+ * The request body ceiling that actually applies, in bytes.
+ *
+ * Not ours and not configurable: `createMcpExpressApp` mounts
+ * `express.json()` with no limit, so express's `100kb` default is what a
+ * request meets. Measured against a real server rather than read off the
+ * default -- 102,392 bytes are accepted, 102,992 are refused with 413.
+ */
+const EXPRESS_JSON_LIMIT_BYTES = 102_400;
+
 export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Promise<Server> {
   // Defaults to 127.0.0.1 and turns on DNS-rebinding protection for localhost
   // hosts, which is what stops a web page in the user's browser from driving
   // this server.
   const app = createMcpExpressApp({ host });
-  app.use(express.json({ limit: "4mb" }));
+
+  // No second body parser here. `createMcpExpressApp` mounts `express.json()`
+  // with no limit of its own, so express's 100 KiB default is the real
+  // ceiling, and it is reached first: a parser added afterwards never sees a
+  // request, because body-parser skips a body that has already been read.
+  //
+  // An `express.json({ limit: "4mb" })` sat on this line and did nothing. It
+  // was worse than absent -- it was the number anyone reading this file would
+  // have believed, and it is four times larger than what actually applies.
+  // Measured, not read: 102,392 bytes are accepted and 102,992 are refused
+  // with 413, which is express's `100kb` exactly.
+  //
+  // 100 KiB is not a number anyone here chose, but it is a defensible one for
+  // a public instance, and MAX_ANALYSIS_IDENTIFIERS is set to fit inside it.
+  // `tests/body-limit.test.ts` holds the two together, so an SDK upgrade that
+  // moves this ceiling fails there rather than in production.
+
+  // That test guards the *default* cap. `MCP_MAX_ANALYSIS_IDENTIFIERS` can
+  // raise it at runtime, which puts the two ceilings back into disagreement
+  // on a deployment no test ever sees -- and the symptom is a bare 413 that
+  // names nothing. So the check is repeated here, against the configured
+  // value, where the operator who set it will read it.
+  const worstCaseBody = estimateAnalysisBodyBytes(MAX_ANALYSIS_IDENTIFIERS);
+  if (worstCaseBody > EXPRESS_JSON_LIMIT_BYTES) {
+    logger.warn("MCP_MAX_ANALYSIS_IDENTIFIERS is larger than this transport can carry", {
+      maxAnalysisIdentifiers: MAX_ANALYSIS_IDENTIFIERS,
+      worstCaseBodyBytes: worstCaseBody,
+      bodyLimitBytes: EXPRESS_JSON_LIMIT_BYTES,
+      effect: "a request at the cap is refused with 413 before validation runs",
+      hint: "lower the cap, or use stdio, which has no body limit",
+    });
+  }
 
   const sessions = new Map<string, Session>();
 

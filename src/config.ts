@@ -140,3 +140,40 @@ export const MCP_SESSION_TTL_MS = parsePositiveInt(process.env.MCP_SESSION_TTL_M
 
 /** Ceiling on concurrent sessions, so a client loop cannot exhaust memory. */
 export const MCP_MAX_SESSIONS = parsePositiveInt(process.env.MCP_MAX_SESSIONS, 256);
+
+/**
+ * Most identifiers one `reactome_analyze_identifiers` call may submit.
+ *
+ * The list is POSTed to the Analysis Service, which does real work and stores
+ * a result against a token.
+ *
+ * The first version of this cap was justified by calling that an unbounded
+ * amplification. **That was overstated for the transport it matters on.**
+ * Measured against the code as it stood, HTTP already refused a body over
+ * 100 KiB, so the list was in practice bounded near 14,600 short identifiers
+ * -- by express's default, not by anything anyone here decided. What is
+ * genuinely unbounded is stdio, which has no such ceiling.
+ *
+ * So this cap earns its place more modestly than first claimed: over HTTP it
+ * makes the bound *predictable* (3,000 regardless of identifier length,
+ * instead of somewhere between 4,000 and 14,600 depending on how long the
+ * identifiers happen to be) and turns an opaque 413 into a validation error
+ * naming the limit; over stdio it is the only bound there is.
+ *
+ * 3,000 is chosen to fit, not for its own sake. The HTTP transport's body
+ * ceiling is express's 100 KiB default (see `startHttpServer`), and a
+ * `tools/call` carrying 3,000 identifiers of 20 characters comes to about
+ * 69 KB -- a third of the ceiling left spare, so a request at this cap gets
+ * a validation error naming the limit rather than a bare 413 from the
+ * transport. A cap the transport refuses to deliver is not a cap, it is two
+ * disagreeing ones. 4,000 was tried first and left only 10% headroom, which
+ * the test rejected: a cap that only just fits is one identifier-length
+ * change away from being unreachable again.
+ *
+ * `tests/body-limit.test.ts` asserts the two still agree. stdio has no such
+ * ceiling, so a private instance that needs a whole proteome can raise this.
+ */
+export const MAX_ANALYSIS_IDENTIFIERS = parsePositiveInt(
+  process.env.MCP_MAX_ANALYSIS_IDENTIFIERS,
+  3_000
+);
