@@ -5,6 +5,7 @@ import {
   NEO4J_PASSWORD,
   NEO4J_DATABASE,
   CYPHER_QUERY_TIMEOUT_MS,
+  ALLOW_CYPHER_TOOLS,
 } from "../config.js";
 import { logger } from "../logger.js";
 
@@ -12,6 +13,21 @@ let driverInstance: Driver | null = null;
 
 export function isNeo4jConfigured(): boolean {
   return Boolean(NEO4J_URI);
+}
+
+/**
+ * Whether anything Cypher-shaped is offered to clients: the three
+ * `reactome_cypher_*` tools, the `reactome://graph/schema` resource, and the
+ * Cypher section of the server instructions.
+ *
+ * All three are the same decision, so they ask the same question here. They
+ * used to each test `isNeo4jConfigured()` independently, which is how the
+ * opt-in added on 2026-09-21 reached the tools and left the other two behind:
+ * a server that had been told not to offer Cypher still published the graph
+ * schema and still instructed clients to call tools it had not registered.
+ */
+export function isCypherEnabled(): boolean {
+  return isNeo4jConfigured() && ALLOW_CYPHER_TOOLS;
 }
 
 function isLocalhost(uri: string): boolean {

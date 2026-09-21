@@ -12,7 +12,8 @@ import { registerExportTools } from "./export.js";
 import { registerInteractorTools } from "./interactors.js";
 import { registerGsaTools } from "./gsa.js";
 import { registerCypherTools } from "./cypher.js";
-import { isNeo4jConfigured } from "../clients/neo4j.js";
+import { isCypherEnabled, isNeo4jConfigured } from "../clients/neo4j.js";
+import { logger } from "../logger.js";
 import { withNewRequestContext } from "../context.js";
 import { capToolResult } from "../response-limits.js";
 import { MAX_TOOL_RESPONSE_CHARS } from "../config.js";
@@ -63,9 +64,20 @@ export function registerAllTools(server: McpServer) {
   registerInteractorTools(server);
   registerGsaTools(server);
 
-  // Graph database tools — only when NEO4J_URI is set
-  if (isNeo4jConfigured()) {
+  // Graph database tools — a connection AND an explicit opt-in.
+  //
+  // `NEO4J_URI` alone used to be enough, which made arbitrary query access a
+  // side effect of a connection string. A public instance that set it for any
+  // other reason would have published `reactome_cypher_query`.
+  if (isCypherEnabled()) {
     registerCypherTools(server);
+  } else if (isNeo4jConfigured()) {
+    // Said out loud, because an operator who set NEO4J_URI expecting these
+    // tools needs to know why they are absent. The reverse -- silently
+    // present -- is the failure this guard exists for.
+    logger.warn("Cypher tools are OFF: MCP_ALLOW_CYPHER is not 1", {
+      hint: "Set MCP_ALLOW_CYPHER=1 on an instance that is not publicly reachable.",
+    });
   }
 
   // Register utility tools directly here

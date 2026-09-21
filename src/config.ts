@@ -66,6 +66,24 @@ export const NEO4J_USER = process.env.NEO4J_USER ?? "neo4j";
 export const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD ?? "neo4j";
 export const NEO4J_DATABASE = process.env.NEO4J_DATABASE ?? "graph.db";
 
+/**
+ * Whether the Cypher tools may be registered at all.
+ *
+ * Default-deny, and deliberately a separate switch from `NEO4J_URI`.
+ *
+ * Until 2026-09-21 the Cypher tools appeared whenever `NEO4J_URI` was set,
+ * which made "can the public run arbitrary graph queries" a side effect of a
+ * connection string rather than a decision. That is the wrong shape for this
+ * particular capability: a deployment might set `NEO4J_URI` for any number of
+ * good reasons -- the graph-schema warm-up, a future non-Cypher graph tool --
+ * and would silently publish `reactome_cypher_query` by doing so.
+ *
+ * So it is an opt-in. Forgetting it costs a missing tool on an internal
+ * instance, which is visible and harmless. Forgetting the inverse would have
+ * cost arbitrary query access on a public one.
+ */
+export const ALLOW_CYPHER_TOOLS = process.env.MCP_ALLOW_CYPHER === "1";
+
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
   const n = Number(raw);
