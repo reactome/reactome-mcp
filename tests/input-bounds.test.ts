@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { registerAllTools } from "../src/tools/index.js";
 import { MAX_ANALYSIS_IDENTIFIERS } from "../src/config.js";
 
@@ -45,18 +45,65 @@ function registeredSchemas(): Map<string, Shape> {
   return schemas;
 }
 
+/**
+ * Every tool in *every* configuration, not just the default one.
+ *
+ * The first version of the sweep called `registerAllTools` once, with no
+ * environment, and so walked 59 of the 62 tools -- the three Cypher tools
+ * register only behind `NEO4J_URI` plus `MCP_ALLOW_CYPHER`. A sweep whose
+ * entire value is completeness, quietly covering a subset, is the exact
+ * failure it was written to prevent. It is also the same shape as the Cypher
+ * gate itself: the thing that varies by configuration, checked in one
+ * configuration.
+ */
+async function allSchemas(): Promise<Map<string, Shape>> {
+  const merged = new Map<string, Shape>();
+  const configs = [{}, { NEO4J_URI: "bolt://localhost:7690", MCP_ALLOW_CYPHER: "1" }];
+  for (const env of configs) {
+    vi.resetModules();
+    const previous: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(env)) {
+      previous[k] = process.env[k];
+      process.env[k] = v;
+    }
+    try {
+      const mod = await import("../src/tools/index.js");
+      const server = {
+        tool: (...args: unknown[]) => {
+          const name = args[0];
+          const shape = args[2];
+          if (typeof name === "string" && shape && typeof shape === "object") {
+            merged.set(name, shape as Shape);
+          }
+          return undefined;
+        },
+      };
+      mod.registerAllTools(server as never);
+    } finally {
+      for (const [k, v] of Object.entries(previous)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+      vi.resetModules();
+    }
+  }
+  return merged;
+}
+
 const ABSURD = Array.from({ length: 100_001 }, () => "R-HSA-109582");
 const ONE = ["R-HSA-109582"];
 
 describe("tool input bounds", () => {
-  const schemas = registeredSchemas();
-
-  it("registers tools to check", () => {
-    // Without this the sweep below would pass vacuously against an empty map.
-    expect(schemas.size).toBeGreaterThan(50);
+  it("covers every tool in every configuration, including Cypher", async () => {
+    const schemas = await allSchemas();
+    // Without this the sweep would pass vacuously against an empty map, and
+    // without the Cypher names it would pass while missing three tools.
+    expect(schemas.size).toBe(62);
+    expect([...schemas.keys()].filter(n => n.startsWith("reactome_cypher"))).toHaveLength(3);
   });
 
-  it("has no argument anywhere that accepts an unbounded list", () => {
+  it("has no argument anywhere that accepts an unbounded list", async () => {
+    const schemas = await allSchemas();
     const unbounded: string[] = [];
     let arrayArgs = 0;
     for (const [tool, shape] of schemas) {

@@ -6,18 +6,21 @@ import { MAX_ANALYSIS_IDENTIFIERS } from "../config.js";
  *
  * `installToolWrapper` already caps what a call returns, and says why it does
  * so in one place: "a per-tool guard is a guard somebody forgets to add to the
- * fifty-seventh". Nothing capped the other direction. On a private instance
- * that was academic. Fronted by a public nginx it is not:
+ * fifty-seventh". Nothing capped the other direction:
  * `reactome_analyze_identifiers` took `z.array(nonEmptyString)` with no
- * maximum and posted `identifiers.join("\n")` to the Analysis Service, so one
- * small MCP call could commission an arbitrarily large analysis job and a
- * stored result — an amplification with no ceiling anywhere in the path.
+ * maximum and posted `identifiers.join("\n")` to the Analysis Service.
+ *
+ * I first justified this as an unbounded amplification. Over HTTP that was
+ * overstated — express's 100 KiB default already bounded it, by accident
+ * rather than by anyone's decision. Over stdio nothing bounded it at all.
+ * `MAX_ANALYSIS_IDENTIFIERS` says what the cap actually buys.
  *
  * An input cap cannot be applied centrally the way the output cap is, because
  * only the caller knows what a sane length is for a given argument. What can
- * be central is the *requirement*: `tests/input-bounds.test.ts` walks every
- * registered tool schema and fails on any array without a maximum, so the
- * fifty-seventh tool cannot quietly reintroduce this.
+ * be central is the *requirement*: `tests/input-bounds.test.ts` drives every
+ * registered tool, in every configuration, and fails on any argument that
+ * accepts an absurd array — so the fifty-seventh tool cannot quietly
+ * reintroduce this.
  */
 
 /**
@@ -46,3 +49,20 @@ export function optionalList(max: number, describe: string) {
 /** Identifier lists posted to the Analysis Service. Configurable: a real
  *  enrichment can be large, and the right ceiling depends on the deployment. */
 export const identifierList = (describe: string) => boundedList(MAX_ANALYSIS_IDENTIFIERS, describe);
+
+/**
+ * A deliberately pessimistic size for a `tools/call` carrying `count`
+ * identifiers, in bytes.
+ *
+ * Used to warn at startup when a configured cap cannot fit through the HTTP
+ * transport. It must never *under*-state the real body, or the warning is
+ * worse than none; `tests/body-limit.test.ts` asserts it stays at or above a
+ * real serialised request, so the margin cannot silently erode.
+ *
+ * 20 characters is longer than a gene symbol or a UniProt accession and
+ * longer than an Ensembl gene ID (15). 5 bytes per element covers the quotes,
+ * comma and JSON whitespace; 256 covers the JSON-RPC envelope.
+ */
+export function estimateAnalysisBodyBytes(count: number, identifierLength = 20): number {
+  return 256 + count * (identifierLength + 5);
+}

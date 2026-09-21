@@ -145,8 +145,20 @@ export const MCP_MAX_SESSIONS = parsePositiveInt(process.env.MCP_MAX_SESSIONS, 2
  * Most identifiers one `reactome_analyze_identifiers` call may submit.
  *
  * The list is POSTed to the Analysis Service, which does real work and stores
- * a result against a token, so an uncapped list is an amplification: a few
- * bytes of MCP request commissioning an unbounded job.
+ * a result against a token.
+ *
+ * The first version of this cap was justified by calling that an unbounded
+ * amplification. **That was overstated for the transport it matters on.**
+ * Measured against the code as it stood, HTTP already refused a body over
+ * 100 KiB, so the list was in practice bounded near 14,600 short identifiers
+ * -- by express's default, not by anything anyone here decided. What is
+ * genuinely unbounded is stdio, which has no such ceiling.
+ *
+ * So this cap earns its place more modestly than first claimed: over HTTP it
+ * makes the bound *predictable* (3,000 regardless of identifier length,
+ * instead of somewhere between 4,000 and 14,600 depending on how long the
+ * identifiers happen to be) and turns an opaque 413 into a validation error
+ * naming the limit; over stdio it is the only bound there is.
  *
  * 3,000 is chosen to fit, not for its own sake. The HTTP transport's body
  * ceiling is express's 100 KiB default (see `startHttpServer`), and a

@@ -26,6 +26,7 @@ import { request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { startHttpServer } from "../src/http.js";
 import { MAX_ANALYSIS_IDENTIFIERS } from "../src/config.js";
+import { estimateAnalysisBodyBytes } from "../src/tools/limits.js";
 
 /** Longer than a gene symbol or a UniProt accession; an Ensembl gene ID is 15. */
 const PESSIMISTIC_IDENTIFIER = "X".repeat(20);
@@ -96,5 +97,29 @@ describe("request body ceiling", () => {
     // well under the ceiling.
     const bytes = Buffer.byteLength(analyzeCall(MAX_ANALYSIS_IDENTIFIERS));
     expect(bytes).toBeLessThan(90_000);
+  });
+});
+
+describe("the startup estimate", () => {
+  /**
+   * `startHttpServer` warns when the *configured* cap cannot fit through the
+   * transport, using an estimate rather than a serialised request. An
+   * estimate that under-states the real body would make that warning worse
+   * than none: it would stay silent on exactly the misconfiguration it
+   * exists to report.
+   */
+  it("never under-states a real request at the cap", () => {
+    const real = Buffer.byteLength(analyzeCall(MAX_ANALYSIS_IDENTIFIERS));
+    expect(estimateAnalysisBodyBytes(MAX_ANALYSIS_IDENTIFIERS)).toBeGreaterThanOrEqual(real);
+  });
+
+  it("would fire on the cap that was actually wrong", () => {
+    // 10,000 was shipped in the previous commit and could not be delivered.
+    // If the estimate does not flag that, it flags nothing worth flagging.
+    expect(estimateAnalysisBodyBytes(10_000)).toBeGreaterThan(102_400);
+  });
+
+  it("does not fire on the cap in use", () => {
+    expect(estimateAnalysisBodyBytes(MAX_ANALYSIS_IDENTIFIERS)).toBeLessThan(102_400);
   });
 });
