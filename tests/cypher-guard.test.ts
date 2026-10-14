@@ -19,7 +19,9 @@ describe("assertReadOnlyQuery: what is allowed", () => {
   it("accepts plain read queries", () => {
     accepted("MATCH (n:Pathway) RETURN n LIMIT 10");
     accepted("MATCH (p:Pathway {stId: $id})-[:hasEvent]->(e) RETURN e.displayName LIMIT 25");
-    accepted("MATCH (n) WITH n LIMIT 5 CALL { WITH n RETURN n.dbId AS id } RETURN id");
+    accepted("MATCH (n) WHERE n.displayName STARTS WITH 'Signal' RETURN n.stId LIMIT 5");
+    accepted("MATCH (n:Pathway) RETURN n.create, n.set, n.delete, n.use LIMIT 1");
+    accepted("RETURN {set: 1, delete: 2, call: 3} AS m");
   });
 
   it("accepts apoc, call, use and load as words inside data", () => {
@@ -39,6 +41,9 @@ describe("assertReadOnlyQuery: what is allowed", () => {
       "CALL db.constraints()",
       "CALL dbms.components() YIELD name, versions, edition RETURN *",
       "call DB.LABELS()",
+      // Backtick-quoted parts are the same name once unquoted.
+      "CALL `db`.`labels`() YIELD label RETURN label",
+      "CALL db.`schema`.nodeTypeProperties()",
       "SHOW INDEXES",
       "SHOW ALL INDEXES YIELD name RETURN name",
       "SHOW CONSTRAINTS",
@@ -146,7 +151,78 @@ describe("assertReadOnlyQuery: is not bypassed by", () => {
     refused("WITH 'a//' AS s CALL dbms.listConfig() YIELD name RETURN name");
   });
 
-  it("hiding the call inside a comment (a commented-out call is refused too)", () => {
-    refused("// CALL apoc.cypher.runWrite('...')\nMATCH (n) RETURN n");
+  it("a comment opener inside a line comment or a string", () => {
+    // Regex passes over the whole text treated `/*` inside a `//` comment as
+    // opening a block comment, and swallowed what Neo4j actually runs.
+    refused("// /*\nLOAD/**/CSV FROM 'http://x/' AS r RETURN r");
+    refused("// /*\nUSE/**/otherdb MATCH (n) RETURN n");
+    refused(
+      "// /*\nRETURN apoc/**/.cypher.runFirstColumnSingle('CA'+'LL dbms.listQueries() YIELD queryId RETURN queryId', {})"
+    );
+    refused("RETURN '/*' AS a // */\nLOAD CSV FROM 'http://x/' AS r RETURN r");
+    refused('RETURN "/*" AS a\nCALL dbms.listConfig() // */');
+    refused("RETURN '\\'/*' AS a\nCALL dbms.listConfig()");
+  });
+
+  it("separators Cypher treats as whitespace, and tokens run together", () => {
+    refused("LOAD\u001CCSV FROM 'http://x/' AS r RETURN r");
+    refused("USE\u001Cdb MATCH (n) RETURN n");
+    refused("RETURN apoc\u001C.text.join(['a'], ',')");
+    refused("MATCH (n) RETURN n LIMIT 1CALL dbms.listConfig()");
+    refused("LOAD\u00A0CSV FROM 'http://x/' AS r RETURN r");
+    refused("LOAD\u2003CSV FROM 'http://x/' AS r RETURN r");
+    refused("LOAD\u0085CSV FROM 'http://x/' AS r RETURN r");
+  });
+
+  it("a line separator a comment might or might not end at", () => {
+    refused("// x\u2028LOAD CSV FROM 'http://x/' AS r RETURN r");
+    refused("// it's\u2029MATCH (n) RETURN n");
+  });
+
+  it("anything it cannot finish reading", () => {
+    refused("MATCH (n) RETURN 'unterminated");
+    refused('MATCH (n) RETURN "unterminated');
+    refused("MATCH (n) RETURN n /* unterminated");
+    refused("MATCH (n) RETURN n.`unterminated");
+  });
+});
+
+describe("assertReadOnlyQuery: ignores what Neo4j ignores", () => {
+  it("text inside comments and string literals", () => {
+    accepted("// CALL apoc.cypher.runWrite('...')\nMATCH (n) RETURN n LIMIT 1");
+    accepted("/* LOAD CSV FROM 'x' */ MATCH (n) RETURN n LIMIT 1");
+    accepted("MATCH (n) WHERE n.name = 'USE system; CALL dbms.listConfig()' RETURN n LIMIT 1");
+    accepted('MATCH (n) WHERE n.name = "it\\"s apoc.x" RETURN n LIMIT 1');
+  });
+});
+
+describe("assertReadOnlyQuery: refuses writes and admin as keywords", () => {
+  it("write and administration clauses", () => {
+    for (const q of [
+      "CREATE (n:X) RETURN n",
+      "MATCH (n) SET n.x = 1",
+      "MATCH (n) DETACH DELETE n",
+      "MATCH (n) REMOVE n.x",
+      "MERGE (n:X {id: 1})",
+      "DROP INDEX x",
+      "GRANT ROLE admin TO bob",
+      "DENY READ {*} ON GRAPH * TO bob",
+      "REVOKE ROLE admin FROM bob",
+      "ALTER USER bob SET PASSWORD 'x'",
+      "START DATABASE neo4j",
+      "STOP DATABASE neo4j",
+      "USING PERIODIC COMMIT LOAD CSV FROM 'x' AS r RETURN r",
+    ]) {
+      refused(q);
+    }
+  });
+
+  it("CALL subqueries, which are not needed to read and can run in transactions", () => {
+    refused("MATCH (n) WITH n LIMIT 5 CALL { WITH n RETURN n.dbId AS id } RETURN id");
+    refused("MATCH (n) CALL (n) { RETURN n.dbId AS id } RETURN id");
+  });
+
+  it("fulltext procedures, which are not on the allowlist", () => {
+    refused("CALL db.index.fulltext.queryNodes('x', 'y')");
   });
 });

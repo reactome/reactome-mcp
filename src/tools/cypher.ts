@@ -82,7 +82,7 @@ export function registerCypherTools(server: McpServer) {
 
   server.tool(
     "reactome_cypher_query",
-    "Run a read-only Cypher query against the Reactome graph database (Neo4j). Call reactome_cypher_schema first; never guess labels or properties. The session runs in READ mode, which rejects CREATE/MERGE/DELETE/SET/REMOVE. CALL is allowed only for the built-in schema procedures (db.labels, db.schema.*, db.indexes, ...); APOC, other procedures, LOAD CSV, USE and SHOW other than indexes/constraints are rejected before execution. A server-side timeout terminates long queries. Rows are streamed and reading stops at max_rows; per-row size and total response size are also capped, so always include a LIMIT and return specific properties (RETURN p.stId, p.displayName) rather than whole nodes.",
+    "Run a read-only Cypher query against the Reactome graph database (Neo4j). Call reactome_cypher_schema first; never guess labels or properties. The session runs in READ mode, which rejects CREATE/MERGE/DELETE/SET/REMOVE. CALL is allowed only for the built-in schema procedures (db.labels, db.relationshipTypes, db.propertyKeys, db.schema.*, db.indexes, db.constraints, dbms.components). Rejected before execution: every other procedure (fulltext procedures such as db.index.fulltext.queryNodes included), CALL subqueries (CALL { ... }), APOC, LOAD CSV, USE, SHOW other than indexes/constraints, and write or admin clauses. A server-side timeout terminates long queries. Rows are streamed and reading stops at max_rows; per-row size and total response size are also capped, so always include a LIMIT and return specific properties (RETURN p.stId, p.displayName) rather than whole nodes.",
     {
       query: z
         .string()

@@ -48,6 +48,13 @@ describe("reactome_cypher_* tools", () => {
     ]);
   });
 
+  it("says in its description what the guard refuses", () => {
+    const description = fakeServer.tools.get("reactome_cypher_query")?.description ?? "";
+    expect(description).toMatch(/fulltext/i);
+    expect(description).toContain("CALL subqueries");
+    expect(description).toContain("LOAD CSV");
+  });
+
   it("runs a query in a READ session, under the configured timeout", async () => {
     fake.respond = () => [{ stId: "R-HSA-109582" }];
     const result = await fakeServer.invoke("reactome_cypher_query", {

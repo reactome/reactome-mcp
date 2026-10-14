@@ -1,22 +1,33 @@
 // What a `reactome_cypher_query` may ask the database to do.
 //
-// Neo4j's READ access mode refuses native writes (CREATE/MERGE/DELETE/SET/
-// REMOVE). It does not refuse everything that reaches outside the graph or
-// costs the server: procedures can open their own transactions, read server
-// configuration, kill other queries or sleep; LOAD CSV is a read clause and
-// fetches URLs; USE switches database, the system database included; SHOW
-// lists transactions, users and procedures.
+// Neo4j's READ access mode refuses native writes. It does not refuse
+// everything that reaches outside the graph or costs the server: procedures
+// can read server configuration, kill other queries or sleep; LOAD CSV is a
+// read clause and fetches URLs; USE switches database, the system database
+// included; SHOW lists transactions, users and procedures.
 //
-// So this is an allowlist, not a list of known offenders. A query may CALL
-// only the read-only built-ins the schema tooling itself uses, may SHOW only
-// indexes and constraints, and may not name APOC, use LOAD CSV, USE or
-// TERMINATE at all.
+// So this is an allowlist, applied to the query as Neo4j will read it. One
+// left-to-right scan splits the text into tokens the way the Cypher lexer
+// does -- string literals, backtick-quoted names, line and block comments,
+// identifiers, numbers, punctuation -- and the rules are checked on those
+// tokens. Separate regex passes over the raw text did not compose: a `/*`
+// inside a `//` comment or a string literal made one pass see a block comment
+// that Neo4j does not, and hide the text after it.
 //
-// It is a guardrail, not the security boundary. A pattern cannot fully parse
-// Cypher, and it errs towards refusing -- a string literal containing
-// "apoc." is refused too. The boundary is that graph access is never enabled
-// on a publicly reachable instance (src/graph/gate.ts), plus Neo4j's own
-// configuration.
+// Rules:
+//   - CALL only for the built-in schema procedures below, compared by name
+//     after backticks are removed; no CALL subqueries.
+//   - SHOW only for indexes and constraints.
+//   - No identifier `apoc` followed by `.` -- no APOC procedure or function.
+//   - No LOAD CSV, USE, TERMINATE, PERIODIC COMMIT, and no write or
+//     administration keyword (CREATE, MERGE, SET, DELETE, REMOVE, DETACH,
+//     DROP, GRANT, DENY, REVOKE, ALTER, START, STOP, RENAME).
+//   - Text the scanner cannot finish reading -- an unterminated string,
+//     comment or quoted name -- is refused.
+//
+// It is a guardrail, not the security boundary, and it errs towards refusing.
+// The boundary is that graph access is never enabled on a publicly reachable
+// instance (src/graph/gate.ts), plus Neo4j's own configuration.
 
 /** Procedures a query may CALL, lower-cased. Everything else is refused. */
 const ALLOWED_PROCEDURES = new Set([
@@ -31,72 +42,239 @@ const ALLOWED_PROCEDURES = new Set([
   "dbms.components",
 ]);
 
+/** Keywords refused wherever they appear as a keyword. */
+const FORBIDDEN_KEYWORDS = new Set([
+  "use",
+  "terminate",
+  "periodic",
+  "create",
+  "merge",
+  "set",
+  "delete",
+  "remove",
+  "detach",
+  "drop",
+  "grant",
+  "deny",
+  "revoke",
+  "alter",
+  "start",
+  "stop",
+  "rename",
+]);
+
+/** Words that may sit between SHOW and INDEXES / CONSTRAINTS. */
+const SHOW_MODIFIERS = new Set([
+  "all",
+  "btree",
+  "fulltext",
+  "lookup",
+  "text",
+  "range",
+  "point",
+  "vector",
+  "unique",
+  "uniqueness",
+  "existence",
+  "exist",
+  "exists",
+  "node",
+  "relationship",
+  "rel",
+  "key",
+  "property",
+]);
+const SHOW_TARGETS = new Set(["index", "indexes", "constraint", "constraints"]);
+
 export class QueryRejected extends Error {
   constructor(public readonly reason: string) {
     super(
       `Query rejected: ${reason}. This server runs read-only queries against the graph and allows ` +
-        `CALL only for ${[...ALLOWED_PROCEDURES].join(", ")}, and SHOW only for indexes and constraints.`
+        `CALL only for ${[...ALLOWED_PROCEDURES].join(", ")} (no CALL subqueries), ` +
+        `and SHOW only for indexes and constraints.`
     );
     this.name = "QueryRejected";
   }
 }
 
+type Token =
+  | { kind: "word"; text: string } // an unquoted identifier or keyword
+  | { kind: "quoted"; text: string } // a backtick-quoted name, unquoted
+  | { kind: "string" } // a string literal; its contents are not kept
+  | { kind: "number" }
+  | { kind: "punct"; text: string };
+
+const IDENTIFIER_START = /[\p{ID_Start}_]/u;
+const IDENTIFIER_PART = /[\p{ID_Continue}_]/u;
+
 /**
- * The forms of the query to check. All of them, because each normalisation
- * closes one way of hiding a token and could open another:
- *
- * - the raw text -- a comment stripper knows nothing of string literals, so a
- *   `'//'` inside a string would otherwise swallow the rest of its line;
- * - comments replaced by a **space** -- a comment separates tokens, so
- *   `LOAD/**\/CSV` is `LOAD CSV` (deleting it made `LOADCSV`, which matched
- *   nothing);
- * - each of those with backticks removed and whitespace around dots closed
- *   up, so `` `dbms`.`listConfig` `` and `dbms . listConfig` read as one name.
+ * Whitespace as Cypher reads it, and then some: everything Unicode calls
+ * white space, every control and format character (U+001C-U+001F included),
+ * and NEL. Treating more as a separator than Neo4j does can only split a
+ * token the guard then refuses; treating less could join two.
  */
-function forms(query: string): string[] {
-  const spaced = query.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
-  const canonical = (text: string) => text.replace(/`/g, "").replace(/\s*\.\s*/g, ".");
-  return [query, spaced, canonical(query), canonical(spaced)];
+const SEPARATOR = /[\p{White_Space}\p{Cc}\p{Cf}\p{Zs}\p{Zl}\p{Zp}]/u;
+
+/** Split a query into tokens. Throws QueryRejected on text it cannot finish. */
+export function tokenize(query: string): Token[] {
+  // Line separators other than LF and CR, anywhere -- inside a comment or a
+  // string included. Where a `//` comment ends at one of these is exactly the
+  // kind of disagreement with the Cypher lexer that hides text, so a query
+  // containing one is refused rather than guessed at.
+  if (/[\u0085\u2028\u2029]/u.test(query)) {
+    throw new QueryRejected("the query contains a Unicode line separator");
+  }
+
+  const tokens: Token[] = [];
+  const chars = [...query]; // by code point, so astral characters stay whole
+  let i = 0;
+
+  const unterminated = (what: string) => {
+    throw new QueryRejected(`unterminated ${what}`);
+  };
+
+  while (i < chars.length) {
+    const c = chars[i] as string;
+    const next = chars[i + 1];
+
+    if (SEPARATOR.test(c)) {
+      i++;
+      continue;
+    }
+
+    // Line comment: to the end of the line.
+    if (c === "/" && next === "/") {
+      i += 2;
+      while (i < chars.length && chars[i] !== "\n" && chars[i] !== "\r") i++;
+      continue;
+    }
+
+    // Block comment: to the first */. Nothing inside it means anything.
+    if (c === "/" && next === "*") {
+      i += 2;
+      while (i < chars.length && !(chars[i] === "*" && chars[i + 1] === "/")) i++;
+      if (i >= chars.length) unterminated("comment");
+      i += 2;
+      continue;
+    }
+
+    // String literal, single or double quoted, with backslash escapes.
+    if (c === "'" || c === '"') {
+      i++;
+      while (i < chars.length && chars[i] !== c) i += chars[i] === "\\" ? 2 : 1;
+      if (i >= chars.length) unterminated("string literal");
+      i++;
+      tokens.push({ kind: "string" });
+      continue;
+    }
+
+    // Backtick-quoted name; a doubled backtick is a literal one.
+    if (c === "`") {
+      let text = "";
+      i++;
+      for (;;) {
+        if (i >= chars.length) unterminated("quoted name");
+        if (chars[i] === "`") {
+          if (chars[i + 1] === "`") {
+            text += "`";
+            i += 2;
+            continue;
+          }
+          i++;
+          break;
+        }
+        text += chars[i];
+        i++;
+      }
+      tokens.push({ kind: "quoted", text });
+      continue;
+    }
+
+    // A number is its leading digits. Whatever follows is read as a new
+    // token, so `1CALL` is a number and then CALL.
+    if (/[0-9]/.test(c)) {
+      while (i < chars.length && /[0-9]/.test(chars[i] as string)) i++;
+      tokens.push({ kind: "number" });
+      continue;
+    }
+
+    if (IDENTIFIER_START.test(c)) {
+      let text = "";
+      while (i < chars.length && IDENTIFIER_PART.test(chars[i] as string)) {
+        text += chars[i];
+        i++;
+      }
+      tokens.push({ kind: "word", text });
+      continue;
+    }
+
+    tokens.push({ kind: "punct", text: c });
+    i++;
+  }
+
+  return tokens;
 }
 
-// A keyword at a token boundary: not part of a longer name, and not a
-// property access like `n.use`.
-const keyword = (word: string) => new RegExp(`(?<![\\w.$])${word}(?![\\w])`, "i");
+const isName = (t: Token | undefined): t is Extract<Token, { kind: "word" | "quoted" }> =>
+  t?.kind === "word" || t?.kind === "quoted";
+const isPunct = (t: Token | undefined, text: string) => t?.kind === "punct" && t.text === text;
+const lower = (t: Token | undefined) => (isName(t) ? t.text.toLowerCase() : undefined);
 
-const SHOW_ALLOWED =
-  /^\s*(?:all\s+|btree\s+|fulltext\s+|lookup\s+|text\s+|range\s+|point\s+|unique\s+|existence\s+|node\s+|relationship\s+|rel\s+|key\s+|exists\s+|property\s+)*(?:index|indexes|constraint|constraints)\b/i;
+/**
+ * Whether the word at `i` is used as a keyword rather than as a name: not a
+ * property or label (`n.set`, `:Create`), a parameter (`$use`) or a map key
+ * (`{delete: 1}`).
+ */
+function isKeyword(tokens: Token[], i: number): boolean {
+  if (tokens[i]?.kind !== "word") return false;
+  const before = tokens[i - 1];
+  if (isPunct(before, ".") || isPunct(before, ":") || isPunct(before, "$")) return false;
+  if (isPunct(tokens[i + 1], ":")) return false;
+  return true;
+}
 
-function check(form: string): string | undefined {
-  if (/(?<![\w$])apoc\./i.test(form)) return "APOC procedures and functions are not allowed";
-  if (new RegExp(`${keyword("load").source}\\s+csv\\b`, "i").test(form)) {
-    return "LOAD CSV is not allowed";
-  }
-  if (new RegExp(`${keyword("use").source}\\s+[\\w\`]`, "i").test(form)) {
-    return "USE is not allowed";
-  }
-  if (keyword("terminate").test(form)) return "TERMINATE is not allowed";
+function check(tokens: Token[]): string | undefined {
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    const word = lower(token);
+    if (word === undefined) continue;
 
-  for (const match of form.matchAll(new RegExp(`${keyword("show").source}`, "gi"))) {
-    const rest = form.slice((match.index ?? 0) + match[0].length);
-    if (!SHOW_ALLOWED.test(rest)) return "SHOW is allowed only for indexes and constraints";
-  }
+    // Any APOC name, procedure or function, whatever it is called from.
+    if (word === "apoc" && isPunct(tokens[i + 1], ".")) {
+      return "APOC procedures and functions are not allowed";
+    }
 
-  for (const match of form.matchAll(new RegExp(`${keyword("call").source}`, "gi"))) {
-    const rest = form.slice((match.index ?? 0) + match[0].length);
-    // CALL { ... } is a subquery, not a procedure.
-    if (/^\s*\{/.test(rest)) continue;
-    const name = /^\s*([A-Za-z_][\w.]*)/.exec(rest)?.[1]?.toLowerCase();
-    if (!name || !ALLOWED_PROCEDURES.has(name)) {
-      return `CALL ${name ?? "(unrecognised target)"} is not allowed`;
+    if (!isKeyword(tokens, i)) continue;
+
+    if (word === "load" && lower(tokens[i + 1]) === "csv") return "LOAD CSV is not allowed";
+    if (FORBIDDEN_KEYWORDS.has(word)) return `${word.toUpperCase()} is not allowed`;
+
+    if (word === "show") {
+      let j = i + 1;
+      while (SHOW_MODIFIERS.has(lower(tokens[j]) ?? "")) j++;
+      if (!SHOW_TARGETS.has(lower(tokens[j]) ?? "")) {
+        return "SHOW is allowed only for indexes and constraints";
+      }
+    }
+
+    if (word === "call") {
+      const parts: string[] = [];
+      let j = i + 1;
+      while (isName(tokens[j])) {
+        parts.push((tokens[j] as { text: string }).text.toLowerCase());
+        if (!isPunct(tokens[j + 1], ".")) break;
+        j += 2;
+      }
+      if (parts.length === 0) return "CALL subqueries are not allowed";
+      const name = parts.join(".");
+      if (!ALLOWED_PROCEDURES.has(name)) return `CALL ${name} is not allowed`;
     }
   }
   return undefined;
 }
 
-/** Throw `QueryRejected` unless every form of the query passes. */
+/** Throw `QueryRejected` unless the query passes every rule. */
 export function assertReadOnlyQuery(query: string): void {
-  for (const form of forms(query)) {
-    const reason = check(form);
-    if (reason) throw new QueryRejected(reason);
-  }
+  const reason = check(tokenize(query));
+  if (reason) throw new QueryRejected(reason);
 }
