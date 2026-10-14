@@ -43,20 +43,21 @@ describe("createServer", () => {
     expect(toolNames).toContain("reactome_analyze_identifiers");
   });
 
-  it("registers no graph tools, whatever the environment says", () => {
-    // Principle IV, now structural rather than configured: there are no graph
-    // tools to gate. The environment is set to what used to switch them ON,
-    // because a test that unsets it would be asserting the old gate still
-    // works rather than that the tools are gone.
-    process.env.NEO4J_URI = "bolt://localhost:7690";
-    process.env.MCP_ALLOW_CYPHER = "1";
+  it("offers graph tools only behind both switches", () => {
+    // The full matrix, every entrypoint, lives in graph-access-gate.test.ts.
+    // This is the factory's own check, in both directions: absent on a
+    // connection string alone, present once the opt-in is added too.
+    const cypherTools = () => {
+      const server = createServer() as unknown as { _registeredTools?: Record<string, unknown> };
+      return Object.keys(server._registeredTools ?? {}).filter(n =>
+        n.startsWith("reactome_cypher")
+      );
+    };
+    process.env.NEO4J_URI = "bolt://127.0.0.1:7687";
     try {
-      const server = createServer();
-      const registered = server as unknown as { _registeredTools?: Record<string, unknown> };
-      const toolNames = Object.keys(registered._registeredTools ?? {});
-
-      expect(toolNames.filter(n => n.includes("cypher"))).toEqual([]);
-      expect(toolNames.length).toBeGreaterThan(40);
+      expect(cypherTools()).toEqual([]);
+      process.env.MCP_ALLOW_CYPHER = "1";
+      expect(cypherTools()).toHaveLength(3);
     } finally {
       delete process.env.NEO4J_URI;
       delete process.env.MCP_ALLOW_CYPHER;

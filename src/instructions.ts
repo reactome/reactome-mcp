@@ -1,4 +1,4 @@
-import { resolveToolGroups, type ToolGroup } from "./tools/index.js";
+import { GRAPH_GROUP, permittedGroups, resolveToolGroups, type ToolGroup } from "./tools/index.js";
 
 const CORE_INSTRUCTIONS = `
 This server exposes the Reactome pathway knowledgebase (https://reactome.org) to LLM clients. Reactome is a manually curated, peer-reviewed database of biological pathways: reactions grouped into pathways grouped into hierarchies, annotated with participants (proteins, complexes, small molecules), regulation, literature, species, and disease.
@@ -69,6 +69,10 @@ const RESOURCE_LINES: { group: ToolGroup; text: string }[] = [
   { group: "pathway", text: "`reactome://pathway/{id}` — templated pathway details." },
   { group: "entity", text: "`reactome://entity/{id}` — templated entity details." },
   { group: "analysis", text: "`reactome://analysis/{token}` — templated analysis results." },
+  {
+    group: "cypher",
+    text: "`reactome://graph/schema` — the graph database schema as JSON (labels, relationship types, properties, indexes, constraints).",
+  },
 ];
 
 const CATEGORY_LINES: Record<ToolGroup, string> = {
@@ -79,8 +83,25 @@ const CATEGORY_LINES: Record<ToolGroup, string> = {
   interactors: `- **Interactors** (\`reactome_psicquic_*\`, \`reactome_static_interactors\`, \`reactome_interactor_pathways\`) — protein–protein interaction data.`,
   export: `- **Export** (\`reactome_export_*\`) — diagrams (PNG/SVG), SBGN, SBML, PDF reports, CSV/JSON analysis exports.`,
   utilities: `- **Utilities** (\`reactome_species\`, \`reactome_diseases\`, \`reactome_database_info\`, \`reactome_mapping_*\`, \`reactome_orthology\`, \`reactome_query\`).`,
+  cypher: `- **Graph database** (\`reactome_cypher_schema\`, \`reactome_cypher_sample\`, \`reactome_cypher_query\`) — read-only Cypher against the Reactome Neo4j graph. See the section below before using it.`,
   gsa: `- **Gene set analysis** (\`reactome_gsa_*\`) — ReactomeGSA: available methods, data types, and searchable public expression datasets. Distinct from Analysis, which is over-representation on a list of identifiers.`,
 };
+
+const CYPHER_INSTRUCTIONS = `
+# Graph database (Cypher)
+
+This instance can query the Reactome graph database directly. Use it for what the REST tools do not expose — arbitrary traversals, joins across relationship types, aggregate counts across labels.
+
+1. Call \`reactome_cypher_schema\` (or read \`reactome://graph/schema\`) **before writing any query**. It lists labels and relationship types with counts, which labels each relationship type connects, property types with mandatory flags, indexes and constraints. Never guess the schema.
+2. Use \`reactome_cypher_sample\` on a label to see a representative node.
+3. Run the query with \`reactome_cypher_query\`:
+   - It runs in a READ-mode session; write clauses are refused by the database.
+   - \`LOAD CSV\` and APOC procedures that write or fetch from outside the graph are refused before execution.
+   - A server-side timeout ends long queries. Always include a \`LIMIT\`, and anchor on an indexed property (for example \`stId\` or \`dbId\`) rather than scanning a whole label.
+   - Return specific properties (\`RETURN p.stId, p.displayName\`) rather than whole nodes; rows and response size are capped.
+
+**When not to use it:** lookups by ID or name, pathway hierarchies and enrichment — the REST tools are cached, cheaper, and format the answer for you.
+`.trim();
 
 /**
  * The instructions a client reads on connecting.
@@ -95,7 +116,10 @@ const CATEGORY_LINES: Record<ToolGroup, string> = {
  * registration, and `tests/tool-groups.test.ts` asserts a restricted
  * instance does not mention what it withheld.
  */
-export function buildServerInstructions(groups: ToolGroup[] = resolveToolGroups()): string {
+export function buildServerInstructions(requested: ToolGroup[] = resolveToolGroups()): string {
+  // The same filter the registrars apply, so the text cannot describe graph
+  // access the gate withheld -- even for a caller that passes its own list.
+  const groups = permittedGroups(requested);
   const categoryLines = groups.map(group => CATEGORY_LINES[group]).join("\n");
   const steps = WORKFLOW_STEPS.filter(
     step => step.group === null || groups.includes(step.group)
@@ -105,7 +129,9 @@ export function buildServerInstructions(groups: ToolGroup[] = resolveToolGroups(
     line => `- ${line.text}`
   );
 
-  return CORE_INSTRUCTIONS.replace("__CATEGORY_LINES__", categoryLines)
+  const core = CORE_INSTRUCTIONS.replace("__CATEGORY_LINES__", categoryLines)
     .replace("__WORKFLOW_STEPS__", steps.join("\n"))
     .replace("__RESOURCE_LINES__", resourceLines.join("\n"));
+
+  return groups.includes(GRAPH_GROUP) ? `${core}\n\n${CYPHER_INSTRUCTIONS}` : core;
 }

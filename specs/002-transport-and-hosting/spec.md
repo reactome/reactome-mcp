@@ -22,14 +22,22 @@ session and a second transport from the same registrations — neither is possib
 while the only instance is a module-scope constant. The idea is harvested from
 #5 by @adidev001.
 
-**No Neo4j from a deployed instance.** Superseded 2026-09-21 by something
-stronger: the graph tools were removed outright, along with the schema resource
-and the `neo4j-driver` dependency, so there is no gate to hold. A public endpoint
-holding database credentials is a different security proposition from one that
-can only make the calls a browser can — and a gate makes that a property of the
-configuration, which is how `src/http-server.ts` came to keep opening a
-connection on `NEO4J_URI` alone after the other call sites were fixed.
-`tests/no-graph-access.test.ts` asserts the absence with the old switches on.
+**No Neo4j from a public instance.** History: graph tools sat behind a
+`NEO4J_URI` gate, then behind `NEO4J_URI` plus `MCP_ALLOW_CYPHER=1`; on
+2026-09-21 they were removed outright, because the gate had been asked in four
+places and `src/http-server.ts` still opened a connection on `NEO4J_URI` alone.
+
+Restored 2026-10-14, switched off by default, for internal instances pointed at
+a dedicated Reactome graph database container. The fix for the missed door is
+structural rather than a fifth call site: one predicate,
+`isGraphAccessEnabled()` in `src/graph/gate.ts`, asked by every surface **and**
+by `getDriver()`, the only code that imports `neo4j-driver`. A surface that
+forgets the check still gets no driver. `tests/graph-access-gate.test.ts`
+drives both entrypoints, `startHttpServer`, `createServer` and the registrars in
+every combination of the two variables, counting driver constructions on a fake
+driver. A public endpoint holding database credentials is still a different
+security proposition from one that can only make the calls a browser can; a
+hosted instance does not set either variable.
 
 **Analysis runs in the Analysis Service.** The server submits identifiers, holds
 the token, and formats the reply.

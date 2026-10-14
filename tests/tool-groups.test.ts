@@ -31,6 +31,17 @@ function namesFor(register: (server: never) => void): string[] {
   return names;
 }
 
+function withGraphAccess<T>(body: () => T): T {
+  process.env.NEO4J_URI = "bolt://127.0.0.1:7687";
+  process.env.MCP_ALLOW_CYPHER = "1";
+  try {
+    return body();
+  } finally {
+    delete process.env.NEO4J_URI;
+    delete process.env.MCP_ALLOW_CYPHER;
+  }
+}
+
 function registeredWith(groups: string | undefined): string[] {
   const previous = process.env.MCP_TOOL_GROUPS;
   if (groups === undefined) delete process.env.MCP_TOOL_GROUPS;
@@ -82,7 +93,10 @@ describe("MCP_TOOL_GROUPS parsing", () => {
   });
 
   it("registers everything only when genuinely unset", () => {
-    expect(resolveToolGroups(undefined)).toEqual(ALL_TOOL_GROUPS);
+    // Everything the instance is allowed: `cypher` additionally needs the
+    // graph access gate open, and it is closed here.
+    expect(resolveToolGroups(undefined)).toEqual(ALL_TOOL_GROUPS.filter(g => g !== "cypher"));
+    withGraphAccess(() => expect(resolveToolGroups(undefined)).toEqual(ALL_TOOL_GROUPS));
   });
 
   it("refuses an empty value rather than falling back to everything", () => {
@@ -154,6 +168,16 @@ describe("instructions match what is registered", () => {
     expect(dangling).toEqual([]);
   });
 
+  it("names no tool or resource the full server does not register, with graph access on", () => {
+    withGraphAccess(() => {
+      const registered = registeredNames(ALL_TOOL_GROUPS);
+      const text = buildServerInstructions(ALL_TOOL_GROUPS);
+      expect(text).toContain("reactome_cypher_query");
+      const dangling = referenced(text).filter(r => !satisfied(r, registered));
+      expect(dangling).toEqual([]);
+    });
+  });
+
   it("names no tool or resource a restricted server does not register", () => {
     const groups: ToolGroup[] = ["search", "pathway", "entity", "utilities"];
     const registered = registeredNames(groups);
@@ -182,7 +206,13 @@ describe("resources follow the same switch", () => {
   };
 
   it("registers every known resource when all groups are on", () => {
-    expect([...resourceUris(ALL_TOOL_GROUPS)].sort()).toEqual([...RESOURCE_URIS].sort());
+    withGraphAccess(() =>
+      expect([...resourceUris(ALL_TOOL_GROUPS)].sort()).toEqual([...RESOURCE_URIS].sort())
+    );
+    // With the gate closed, everything but the graph schema.
+    expect([...resourceUris(ALL_TOOL_GROUPS)].sort()).toEqual(
+      RESOURCE_URIS.filter(u => u !== "reactome://graph/schema").sort()
+    );
   });
 
   it("withholds the resources of an omitted group", () => {

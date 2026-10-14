@@ -61,27 +61,48 @@ export const RESOURCE_TYPES = [
 
 export const DIAGRAM_FORMATS = ["png", "jpg", "jpeg", "svg", "gif"] as const;
 
-/**
- * There is no Neo4j configuration here, deliberately.
- *
- * Constitution Principle IV said the server holds no Neo4j connection in any
- * deployment the team runs, and enforced it with a gate. On 2026-09-21 the
- * gate was removed along with the graph tools: this server is hosted
- * publicly, and neither consumer needed it. The chatbot queries the graph
- * directly with its own driver when it builds embeddings, and the website
- * needs the REST-backed tools only.
- *
- * `NEO4J_URI`, `MCP_ALLOW_CYPHER` and the rest are now inert -- setting them
- * does nothing, because nothing reads them and no code path opens a
- * connection. `tests/no-graph-access.test.ts` keeps that true.
- */
-
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(n)) return fallback;
   return n;
 }
+
+/**
+ * Graph database connection, for internal instances only.
+ *
+ * Whether any of this is used is decided by `isGraphAccessEnabled()` in
+ * src/graph/gate.ts -- `NEO4J_URI` **and** `MCP_ALLOW_CYPHER=1` -- and by
+ * nothing else. These values are read when a driver is built rather than
+ * captured at import, so the gate and the connection cannot disagree about
+ * what the environment says.
+ *
+ * `NEO4J_DATABASE` is optional. Neo4j Community serves one user database, and
+ * leaving it unset uses whichever that is.
+ */
+export function neo4jConnection(env: NodeJS.ProcessEnv = process.env) {
+  return {
+    uri: env.NEO4J_URI?.trim() || undefined,
+    user: env.NEO4J_USER ?? "neo4j",
+    password: env.NEO4J_PASSWORD,
+    database: env.NEO4J_DATABASE?.trim() || undefined,
+  };
+}
+
+/**
+ * Server-side timeout on every Cypher query, in milliseconds. The database
+ * terminates a transaction that runs longer.
+ *
+ * It bounds time, not memory, and not precisely: Neo4j checks the deadline
+ * periodically, so on the Release 97 graph a 300 ms timeout ended a query
+ * after about 4 s, and an expression it evaluates eagerly (a huge `range()`)
+ * can hold memory past the deadline. That is one more reason graph access is
+ * never enabled on a publicly reachable instance.
+ */
+export const CYPHER_QUERY_TIMEOUT_MS = parsePositiveInt(
+  process.env.CYPHER_QUERY_TIMEOUT_MS,
+  30_000
+);
 
 /**
  * Backstop on how much text one tool may return.

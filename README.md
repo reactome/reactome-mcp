@@ -13,7 +13,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - **Species & disease** — list available species and disease annotations
 - **ID mapping** — map external identifiers (UniProt, Ensembl, CHEBI, etc.) to Reactome pathways and reactions
 
-59 tools and 10 resources are registered — see [Tools](#tools) and [Resources](#resources) below for the full list. `tests/readme-tools.test.ts` fails if that count drifts or a tool goes undocumented.
+59 tools and 10 resources are registered by default — see [Tools](#tools) and [Resources](#resources) below for the full list. An internal instance can additionally be given read-only Cypher access to a Reactome graph database, which makes 62 with graph access and 11 resources; it is **off** unless two variables are set, and a public instance must never set them (see [Graph database access](#graph-database-access-internal-instances-only)). `tests/readme-tools.test.ts` fails if those counts drift or a tool goes undocumented.
 
 ## Prerequisites
 
@@ -57,6 +57,7 @@ MCP_TOOL_GROUPS=search,pathway,entity,utilities,analysis
 | `interactors` | 6 |
 | `gsa` | 5 |
 | `utilities` | 7 |
+| `cypher` | 3 — only with [graph database access](#graph-database-access-internal-instances-only) on |
 
 This is a **registration** switch, not a documentation one. An omitted group's
 tools are not registered, are not listed by `tools/list`, and are not
@@ -68,9 +69,83 @@ described nowhere but still answering is the failure this avoids.
 Three cases behave differently on purpose, because the dangerous one is a
 restriction that quietly becomes "everything":
 
-- **unset** — all groups
+- **unset** — all groups (`cypher` only if graph database access is on)
 - **set and empty** — the server refuses to start
 - **set with an unknown name** — the server refuses to start, naming the typo
+- **names `cypher` while graph database access is off** — the server refuses to start, rather than quietly serving without it
+
+## Graph database access (internal instances only)
+
+Three extra tools — `reactome_cypher_schema`, `reactome_cypher_sample` and
+`reactome_cypher_query` — and the `reactome://graph/schema` resource let an
+agent query a Reactome Neo4j graph database directly. They exist for internal
+instances pointed at a **dedicated** graph database container.
+
+**They are off by default, and a publicly reachable instance must never turn
+them on.** An arbitrary Cypher query can run for a long time and hold the
+database's memory and CPU while it does; on a public endpoint that is a way for
+anyone on the internet to degrade the database and whatever else depends on it.
+The read-only safeguards below limit the damage a query can do to the data, not
+the load it can put on the server.
+
+Graph access exists only when **both** of these are set:
+
+| Variable | Value | |
+|---|---|---|
+| `NEO4J_URI` | e.g. `bolt://127.0.0.1:7687` | where the graph database listens |
+| `MCP_ALLOW_CYPHER` | exactly `1` | the explicit opt-in; any other value is off |
+
+Either one alone does nothing: no tools, no schema resource, no mention in the
+instructions the server sends on connection, and no database connection is
+ever opened. `NEO4J_URI` alone is deliberately not enough — a connection string
+is easy to inherit from a shared environment and is not a decision to publish
+query access. The same check guards every surface (tool registration, the
+resource, the instructions, the startup schema warm-up) and the driver factory
+itself, in both the stdio and the HTTP entrypoints;
+`tests/graph-access-gate.test.ts` drives each of them in every combination of
+the two variables. `GET /health` on the HTTP transport reports `graphAccess`.
+
+Optional:
+
+| Variable | Default | |
+|---|---|---|
+| `NEO4J_USER` | `neo4j` | used only when `NEO4J_PASSWORD` is set |
+| `NEO4J_PASSWORD` | _(unset)_ | unset connects without credentials, for a database with authentication disabled |
+| `NEO4J_DATABASE` | _(server default)_ | Neo4j Community serves a single database, so this is rarely needed |
+| `CYPHER_QUERY_TIMEOUT_MS` | `30000` | server-side transaction timeout for `reactome_cypher_*` queries |
+
+**Read-only safeguards.** Every query runs in a READ-mode session, so the
+database refuses `CREATE`, `MERGE`, `DELETE`, `SET` and `REMOVE`. `LOAD CSV` and
+APOC procedures that can write or fetch from outside the graph are refused
+before they reach the database. Each query runs under a server-side timeout,
+and rows, row width and total response size are capped. These are guardrails;
+the boundary is that graph access is not enabled where the public can reach it.
+
+### Running against the Reactome graph database container
+
+Reactome publishes its graph database as an image. Run it bound to loopback, so
+nothing but processes on the same machine can reach it:
+
+```bash
+docker run -d --name reactome-graphdb \
+  -p 127.0.0.1:7687:7687 \
+  public.ecr.aws/reactome/graphdb:Release97
+```
+
+Then point an internal instance at it:
+
+```bash
+NEO4J_URI=bolt://127.0.0.1:7687 MCP_ALLOW_CYPHER=1 node dist/index.js
+```
+
+Add `NEO4J_USER` / `NEO4J_PASSWORD` if the container is configured with
+authentication. The server reads the schema with Neo4j's built-in procedures
+(`db.schema.nodeTypeProperties()`, `db.schema.relTypeProperties()`,
+`db.schema.visualization()`, `SHOW INDEXES`, `SHOW CONSTRAINTS`), so APOC is not
+required — the Reactome image runs Neo4j 4.4 Community without it. The schema
+is read once in the background at startup and cached; on the full graph that
+can take a while, and a section the database cannot provide is reported as
+unavailable rather than shown empty.
 
 ## Usage
 
@@ -235,6 +310,17 @@ Starts a local web UI with an MCP bridge for browser-based exploration.
 | `reactome_orthology` | Get orthologous events/entities in another species |
 | `reactome_query` | Query any Reactome database object by identifier |
 
+### Graph database / Cypher (3 tools — internal instances only)
+
+Registered only when `NEO4J_URI` and `MCP_ALLOW_CYPHER=1` are both set; see
+[Graph database access](#graph-database-access-internal-instances-only).
+
+| Tool | Description |
+|------|-------------|
+| `reactome_cypher_schema` | Labels, relationship types, connecting patterns, properties, indexes and constraints of the graph |
+| `reactome_cypher_sample` | A few nodes of one label, to see their shape |
+| `reactome_cypher_query` | Run a read-only Cypher query (READ session, timeout, capped output) |
+
 ## Resources
 
 ### Static
@@ -245,6 +331,7 @@ Starts a local web UI with an MCP bridge for browser-based exploration.
 | `reactome://species/main` | Main species with curated pathways |
 | `reactome://diseases` | All annotated diseases |
 | `reactome://database/info` | Database version and name |
+| `reactome://graph/schema` | Graph database schema as JSON — only with graph database access on |
 
 ### Templates
 
@@ -279,6 +366,9 @@ MCP_HTTP_PORT=4320 node dist/http-server.js
 | `MCP_HTTP_HOST` | `127.0.0.1` | see below before changing |
 | `MCP_SESSION_TTL_MS` | `1800000` | idle session reaped after 30 min |
 | `MCP_MAX_SESSIONS` | `256` | concurrent session ceiling |
+
+A hosted instance must leave `NEO4J_URI` and `MCP_ALLOW_CYPHER` unset; see
+[Graph database access](#graph-database-access-internal-instances-only).
 
 Endpoints: `POST /mcp` (initialize, then requests), `GET /mcp` (server stream),
 `DELETE /mcp` (end session), `GET /health`.

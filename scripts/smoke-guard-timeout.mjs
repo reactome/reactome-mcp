@@ -1,18 +1,26 @@
 #!/usr/bin/env node
-// Verify the APOC write-through guard and the Cypher query timeout.
-// Requires NEO4J_URI and a running Neo4j. Uses a short timeout to force it.
+// Verify the write-through guard and the Cypher query timeout against a live
+// database. Requires NEO4J_URI and MCP_ALLOW_CYPHER=1. Uses a short timeout on
+// a deliberately slow read to force the server to terminate it. Needs no APOC.
+// Keep the range modest: range() builds its list before the transaction guard
+// gets a look in, so a huge one costs the database memory regardless.
 
 import { rejectWriteThroughCalls } from "../dist/tools/cypher-guard.js";
-import { runRead } from "../dist/clients/neo4j.js";
+import { runRead, closeDriver } from "../dist/clients/neo4j.js";
 
 let failures = 0;
 
-try {
-  rejectWriteThroughCalls("CALL apoc.cypher.runWrite('CREATE (n)', {})");
-  console.log("FAIL: guard did not reject apoc.cypher.runWrite");
-  failures++;
-} catch (e) {
-  console.log("OK: guard rejected apoc.cypher.runWrite —", e.message.slice(0, 80));
+for (const query of [
+  "CALL apoc.cypher.runWrite('CREATE (n)', {})",
+  "LOAD CSV FROM 'http://example.invalid/x.csv' AS row RETURN row",
+]) {
+  try {
+    rejectWriteThroughCalls(query);
+    console.log("FAIL: guard did not reject:", query);
+    failures++;
+  } catch (e) {
+    console.log("OK: guard rejected —", e.message.slice(0, 80));
+  }
 }
 
 try {
@@ -23,9 +31,12 @@ try {
   failures++;
 }
 
-// Force a server-side timeout via apoc.util.sleep which blocks for a known duration.
 try {
-  await runRead("CALL apoc.util.sleep(5000) RETURN 1", {}, { timeoutMs: 300 });
+  await runRead(
+    "UNWIND range(1, 20000000) AS x WITH x WHERE x % 7 = 0 RETURN count(x)",
+    {},
+    { timeoutMs: 300 }
+  );
   console.log("FAIL: expected timeout but runRead returned");
   failures++;
 } catch (e) {
@@ -38,4 +49,5 @@ try {
   }
 }
 
+await closeDriver();
 process.exit(failures > 0 ? 1 : 0);

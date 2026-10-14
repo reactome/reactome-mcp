@@ -1,47 +1,63 @@
 #!/usr/bin/env node
-// Live smoke test for the Cypher tools against a running Reactome Neo4j.
-// Requires: NEO4J_URI set (e.g. bolt://localhost:7687) and the DB reachable.
-// Not part of the automated test suite — run manually after `npm run build`.
+// Live smoke test for the Cypher tools against a running Reactome graph database.
+// Requires: NEO4J_URI (e.g. bolt://127.0.0.1:7687) and MCP_ALLOW_CYPHER=1, and
+// the database reachable. Read-only. Not part of the automated test suite --
+// run manually after `npm run build`. Never point it at a database you do not
+// own.
 
-import { isNeo4jConfigured, fetchGraphSchema, runRead } from "../dist/clients/neo4j.js";
-import { capCypherRows } from "../dist/tools/cypher.js";
+import { isGraphAccessEnabled } from "../dist/graph/gate.js";
+import { runRead, closeDriver } from "../dist/clients/neo4j.js";
+import { fetchGraphSchema } from "../dist/graph/schema.js";
+import { formatGraphSchemaMarkdown } from "../dist/graph/format-schema.js";
 
-if (!isNeo4jConfigured()) {
-  console.error("Set NEO4J_URI (e.g. bolt://localhost:7687) to run this smoke test.");
+if (!isGraphAccessEnabled()) {
+  console.error("Set NEO4J_URI and MCP_ALLOW_CYPHER=1 to run this smoke test.");
   process.exit(2);
 }
 
 async function main() {
-  console.log("[smoke] fetching graph schema…");
-  const schema = await fetchGraphSchema();
-  console.log(`  labels: ${schema.labels.length}`);
-  console.log(`  relationship types: ${schema.relationshipTypes.length}`);
-  console.log(`  labels with properties: ${Object.keys(schema.propertiesByLabel).length}`);
-  console.log(`  first 5 labels: ${schema.labels.slice(0, 5).join(", ")}`);
-
-  console.log("[smoke] database info query…");
-  const info = await runRead(
-    "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition"
+  console.log("[smoke] database components…");
+  console.log(
+    " ",
+    JSON.stringify(await runRead("CALL dbms.components() YIELD name, versions, edition RETURN *"))
   );
-  console.log("  components:", JSON.stringify(info));
+
+  console.log("[smoke] fetching graph schema (built-in procedures only)…");
+  const started = Date.now();
+  const schema = await fetchGraphSchema();
+  console.log(`  took ${Date.now() - started} ms`);
+  console.log(`  nodes: ${schema.stats.nodeCount}, relationships: ${schema.stats.relCount}`);
+  console.log(`  labels: ${Object.keys(schema.stats.labels).length}`);
+  console.log(`  relationship types: ${Object.keys(schema.stats.relTypesCount).length}`);
+  console.log(`  patterns: ${schema.patterns.length}`);
+  console.log(`  node property rows: ${schema.nodeTypeProperties.length}`);
+  console.log(`  rel property rows: ${schema.relTypeProperties.length}`);
+  console.log(`  indexes: ${schema.indexes.length}, constraints: ${schema.constraints.length}`);
+  console.log(`  unavailable: ${JSON.stringify(schema.unavailable)}`);
+  console.log(`  digest: ${formatGraphSchemaMarkdown(schema).length} chars`);
 
   console.log("[smoke] sampling Pathway nodes…");
   const pathways = await runRead(
     "MATCH (n:Pathway) RETURN n.stId AS stId, n.displayName AS name LIMIT $limit",
     { limit: 3 }
   );
-  console.log("  pathways:", JSON.stringify(pathways, null, 2));
+  console.log("  pathways:", JSON.stringify(pathways));
 
-  console.log("[smoke] exercising capCypherRows with a wide row…");
-  const wide = Array.from({ length: 5 }, () => ({ big: "x".repeat(4000) }));
-  const { output, stats } = capCypherRows(wide, 10, 500, 40000);
-  console.log(`  output rows: ${output.length}, stats: ${JSON.stringify(stats)}`);
+  console.log("[smoke] a write is refused by the READ-mode session…");
+  try {
+    await runRead("CREATE (n:SmokeTestShouldNotExist) RETURN n");
+    console.log("  FAIL: the write was accepted");
+    process.exitCode = 1;
+  } catch (error) {
+    console.log("  OK:", String(error?.message ?? error).slice(0, 120));
+  }
 
-  console.log("[smoke] OK");
-  process.exit(0);
+  await closeDriver();
+  console.log(process.exitCode ? "[smoke] FAILED" : "[smoke] OK");
 }
 
-main().catch(err => {
+main().catch(async err => {
   console.error("[smoke] FAILED:", err);
+  await closeDriver();
   process.exit(1);
 });

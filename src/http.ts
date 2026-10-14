@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { resolveToolGroups } from "./tools/index.js";
+import { GRAPH_GROUP, resolveToolGroups } from "./tools/index.js";
 import { estimateAnalysisBodyBytes } from "./tools/limits.js";
 import type { Server } from "node:http";
 import type { Request, Response } from "express";
@@ -55,7 +55,11 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
   // documentation said the server refuses to start. It does over stdio,
   // where createServer runs once at boot. It did not here, which is the
   // transport that is actually deployed.
-  resolveToolGroups();
+  //
+  // Also what /health reports as `graphAccess`: whether sessions on this
+  // instance are offered the Cypher tools, so an operator can see which way
+  // the gate went without reading the environment.
+  const graphAccess = resolveToolGroups().includes(GRAPH_GROUP);
 
   // Defaults to 127.0.0.1 and turns on DNS-rebinding protection for localhost
   // hosts, which is what stops a web page in the user's browser from driving
@@ -229,6 +233,7 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
       sessions: sessions.size,
       contentService: CONTENT_SERVICE_URL,
       analysisService: ANALYSIS_SERVICE_URL,
+      graphAccess,
     });
   });
 
@@ -239,6 +244,7 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
         port,
         contentService: CONTENT_SERVICE_URL,
         analysisService: ANALYSIS_SERVICE_URL,
+        graphAccess,
       });
       resolve(http);
     });

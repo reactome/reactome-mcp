@@ -33,6 +33,21 @@ describe("README tool coverage", () => {
     expect(missing).toEqual([]);
   });
 
+  it("documents the graph tools, which only register behind the gate", () => {
+    process.env.NEO4J_URI = "bolt://127.0.0.1:7687";
+    process.env.MCP_ALLOW_CYPHER = "1";
+    try {
+      const names = registered();
+      expect(names.filter(n => n.startsWith("reactome_cypher"))).toHaveLength(3);
+      expect(names.filter(name => !readme.includes(name))).toEqual([]);
+      expect(readme).toContain(`${names.length} with graph access`);
+    } finally {
+      delete process.env.NEO4J_URI;
+      delete process.env.MCP_ALLOW_CYPHER;
+    }
+    expect(readme).toContain("MCP_ALLOW_CYPHER");
+  });
+
   it("states the tool count, and states it correctly", () => {
     const names = registered();
     expect(names.length).toBeGreaterThan(0);

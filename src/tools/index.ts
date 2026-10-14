@@ -12,6 +12,8 @@ import { registerEntityTools } from "./entity.js";
 import { registerExportTools } from "./export.js";
 import { registerInteractorTools } from "./interactors.js";
 import { registerGsaTools } from "./gsa.js";
+import { registerCypherTools } from "./cypher.js";
+import { isGraphAccessEnabled } from "../graph/gate.js";
 import { withNewRequestContext } from "../context.js";
 import { capToolResult } from "../response-limits.js";
 import { MAX_TOOL_RESPONSE_CHARS } from "../config.js";
@@ -70,11 +72,28 @@ export const TOOL_GROUPS = {
   interactors: registerInteractorTools,
   gsa: registerGsaTools,
   utilities: registerUtilityTools,
+  // Graph database access. Never registered unless the gate in
+  // src/graph/gate.ts is open -- see permittedGroups().
+  cypher: registerCypherTools,
 } as const satisfies Record<string, (server: McpServer) => void>;
 
 export type ToolGroup = keyof typeof TOOL_GROUPS;
 
 export const ALL_TOOL_GROUPS = Object.keys(TOOL_GROUPS) as ToolGroup[];
+
+/** The one group that additionally needs the graph access gate open. */
+export const GRAPH_GROUP: ToolGroup = "cypher";
+
+/**
+ * `groups`, less the graph group unless the graph access gate is open.
+ *
+ * Applied by every registrar and by the instructions -- not only by
+ * `resolveToolGroups()` -- so a caller that builds its own group list still
+ * cannot get past the gate.
+ */
+export function permittedGroups(groups: readonly ToolGroup[]): ToolGroup[] {
+  return isGraphAccessEnabled() ? [...groups] : groups.filter(g => g !== GRAPH_GROUP);
+}
 
 /**
  * Which groups of tools this instance registers, from `MCP_TOOL_GROUPS`.
@@ -106,7 +125,9 @@ export const ALL_TOOL_GROUPS = Object.keys(TOOL_GROUPS) as ToolGroup[];
 export function resolveToolGroups(
   raw: string | undefined = process.env.MCP_TOOL_GROUPS
 ): ToolGroup[] {
-  if (raw === undefined) return ALL_TOOL_GROUPS;
+  // "Everything" means everything this instance is permitted: the graph
+  // group needs NEO4J_URI and MCP_ALLOW_CYPHER=1 as well.
+  if (raw === undefined) return permittedGroups(ALL_TOOL_GROUPS);
 
   const requested = raw
     .split(",")
@@ -128,6 +149,17 @@ export function resolveToolGroups(
     );
   }
 
+  // Asking for graph access and not getting it should be loud. The opposite
+  // -- quietly dropping the group -- would leave an operator wondering why
+  // the tools are missing; quietly *adding* it is what the gate prevents.
+  if (requested.includes(GRAPH_GROUP) && !isGraphAccessEnabled()) {
+    throw new Error(
+      `MCP_TOOL_GROUPS names "${GRAPH_GROUP}", but graph database access is off. ` +
+        `It needs both NEO4J_URI and MCP_ALLOW_CYPHER=1, and must never be enabled ` +
+        `on a publicly reachable instance.`
+    );
+  }
+
   // Deduplicated, and in the map's order rather than the caller's, so the
   // registration order does not depend on how the variable was written.
   return ALL_TOOL_GROUPS.filter(name => requested.includes(name));
@@ -136,17 +168,14 @@ export function resolveToolGroups(
 export function registerAllTools(server: McpServer, groups: ToolGroup[] = resolveToolGroups()) {
   installToolWrapper(server);
 
-  // No graph database tools. They were removed on 2026-09-21 when this
-  // server became publicly hosted: Constitution Principle IV already said no
-  // deployment holds a Neo4j connection, and a gate enforcing that is a gate
-  // somebody can flip. Nothing here opens one now.
+  const registering = permittedGroups(groups);
+  for (const group of registering) TOOL_GROUPS[group](server);
 
-  for (const group of groups) TOOL_GROUPS[group](server);
-
-  if (groups.length < ALL_TOOL_GROUPS.length) {
-    const omitted = ALL_TOOL_GROUPS.filter(g => !groups.includes(g));
+  const available = permittedGroups(ALL_TOOL_GROUPS);
+  if (registering.length < available.length) {
+    const omitted = available.filter(g => !registering.includes(g));
     logger.info("registering a subset of tool groups", {
-      registered: groups,
+      registered: registering,
       omitted,
       source: "MCP_TOOL_GROUPS",
     });
