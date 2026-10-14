@@ -25,6 +25,9 @@
 //     ALTER, RENAME). SET and SHOW are refused even as variable names: they
 //     can begin a clause in too many places to tell apart safely.
 //   - A number literal with a name running straight on from it is refused.
+//   - No CYPHER options prefix (version, planner, runtime), which would
+//     otherwise move where a query begins; `cypher` is not usable as a
+//     variable name either.
 //   - Text the scanner cannot finish reading -- an unterminated string,
 //     comment or quoted name -- is refused.
 //
@@ -303,6 +306,12 @@ function check(tokens: Token[]): string | undefined {
     if (!isKeyword(tokens, i)) continue;
 
     if (word === "load" && lower(tokens[i + 1]) === "csv") return "LOAD CSV is not allowed";
+    // The pre-parser prefix `CYPHER [version] [key=value]*` is stripped before
+    // the query is parsed, so whatever follows it begins the query -- a USE
+    // included -- though the token before that is not where a query begins.
+    // No tool needs planner or runtime options, so it is refused outright,
+    // wherever it is a keyword (`n.cypher` and `:Cypher` are names).
+    if (word === "cypher") return "the CYPHER options prefix is not allowed";
     // Administration only when followed by DATABASE; otherwise start and
     // stop are ordinary names, common in path queries.
     if ((word === "start" || word === "stop") && lower(tokens[i + 1]) === "database") {

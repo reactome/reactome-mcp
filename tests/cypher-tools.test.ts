@@ -53,6 +53,7 @@ describe("reactome_cypher_* tools", () => {
     expect(description).toContain("db.index.fulltext.queryRelationships");
     expect(description).toContain("CALL subqueries");
     expect(description).toContain("LOAD CSV");
+    expect(description).toContain("CYPHER");
   });
 
   it("runs a query in a READ session, under the configured timeout", async () => {

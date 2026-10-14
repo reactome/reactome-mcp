@@ -303,3 +303,25 @@ describe("assertReadOnlyQuery: names that are keywords elsewhere", () => {
     refused("MATCH (n) WHERE EXISTS { USE other MATCH (m) RETURN m } RETURN n");
   });
 });
+
+describe("assertReadOnlyQuery: the CYPHER pre-parser prefix", () => {
+  it("is refused, so options cannot sit between a query's start and USE", () => {
+    // Neo4j strips `CYPHER [version] [key=value]*` before parsing, so USE
+    // after it begins the query even though the token before it is not.
+    for (const q of [
+      "CYPHER 4.4 USE system CALL dbms.components()",
+      "CYPHER runtime=slotted USE neo4j MATCH (n) RETURN n",
+      "CYPHER USE system SHOW USERS",
+      "EXPLAIN CYPHER planner=cost USE x MATCH (n) RETURN n",
+      "PROFILE CYPHER 4.4 USE x RETURN 1",
+      "CYPHER 4.4 MATCH (n) RETURN n LIMIT 1",
+    ]) {
+      refused(q);
+    }
+  });
+
+  it("does not refuse cypher as a property or label", () => {
+    accepted("MATCH (n:Pathway) RETURN n.cypher LIMIT 1");
+    accepted("MATCH (n:Cypher) RETURN n LIMIT 1");
+  });
+});
