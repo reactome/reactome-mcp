@@ -113,6 +113,7 @@ Optional:
 | `NEO4J_PASSWORD` | _(unset)_ | unset connects without credentials, for a database with authentication disabled |
 | `NEO4J_DATABASE` | _(server default)_ | Neo4j Community serves a single database, so this is rarely needed |
 | `CYPHER_QUERY_TIMEOUT_MS` | `30000` | server-side transaction timeout for `reactome_cypher_*` queries |
+| `NEO4J_SCHEMA_FILE` | _(unset)_ | a schema saved by [`extract-schema`](#saving-the-schema-extract-schema), served instead of extracting one when it matches the database; ignored entirely while graph access is off |
 
 **Read-only safeguards.** Every query runs in a READ-mode session, so the
 database refuses `CREATE`, `MERGE`, `DELETE`, `SET` and `REMOVE`. Before a
@@ -157,6 +158,92 @@ required — the Reactome image runs Neo4j 4.4 Community without it. The schema
 is read once in the background at startup and cached; on the full graph that
 can take a while, and a section the database cannot provide is reported as
 unavailable rather than shown empty.
+
+### Saving the schema: `extract-schema`
+
+Reading the schema of the full Reactome graph takes about a minute. To skip
+that at startup, save it once and point the server at the file:
+
+```bash
+NEO4J_PASSWORD=… node dist/index.js extract-schema \
+  --uri bolt://127.0.0.1:7687 --out reactome-schema.json
+# installed from npm: npx reactome-mcp extract-schema …
+
+NEO4J_URI=bolt://127.0.0.1:7687 MCP_ALLOW_CYPHER=1 \
+  NEO4J_SCHEMA_FILE=reactome-schema.json node dist/index.js
+```
+
+| Option | |
+|---|---|
+| `--uri <uri>` | the database (required) |
+| `--database <name>` | default `NEO4J_DATABASE`, else the server's default database |
+| `--user <name>` | default `NEO4J_USER`, else `neo4j` |
+| `--password-env <VAR>` | read the password from `VAR` instead of `NEO4J_PASSWORD` |
+| `--out <file>` | write here; without it the JSON goes to stdout |
+
+There is no `--password`, and passing one is refused: a command line is visible
+to every user of the machine in `ps`. The password comes from the environment.
+
+`extract-schema` runs the server's own extractor, read-only and under the same
+timeouts, so the file has exactly the structure of the `reactome://graph/schema`
+resource. It does not need `MCP_ALLOW_CYPHER` — it is a command an operator runs
+by hand, not a server, and it publishes nothing. It refuses to write a schema
+with sections it could not read, since a saved schema would keep that gap for as
+long as it is used.
+
+**The file is only served against the database it came from.** Every schema
+carries a `source` fingerprint — Neo4j version and edition, the Reactome release
+from the graph's `DBInfo` node (absent on a graph without one), total node and
+relationship counts, and when it was taken — and a `schemaFormat` number. On its
+first schema request the server reads the same fingerprint from the live
+database (four cheap queries, not the full extraction) and serves the file only
+if they agree and the format is one it reads. Otherwise — another release, a
+database that has gained or lost a node, an older format, a file that is missing
+or is not valid JSON — it logs a warning naming the difference and extracts the
+schema live, as if no file were set. With graph access off, `NEO4J_SCHEMA_FILE`
+is not read at all.
+
+**From the release pipeline.** Once a release's graph database image is built,
+the same command against a container started from it produces a schema that can
+be published beside the image as an optional artifact:
+
+```bash
+docker run -d --name graphdb-schema -p 127.0.0.1:7687:7687 <the new graph database image>
+node dist/index.js extract-schema --uri bolt://127.0.0.1:7687 \
+  --out reactome-<release>-schema.json
+docker rm -f graphdb-schema
+```
+
+An instance run against that image can then set `NEO4J_SCHEMA_FILE` to the
+published file; one run against anything else will fall back to live extraction
+on its own.
+
+### Pointing at your own database
+
+A curator, or anyone with a Reactome-shaped graph of their own, can run an
+internal instance against it. The same rule applies as everywhere else here:
+**only on an instance that is not publicly reachable** — on your own machine
+over stdio, or bound to loopback.
+
+```bash
+NEO4J_URI=bolt://127.0.0.1:7687 \
+NEO4J_USER=neo4j NEO4J_PASSWORD=… \
+NEO4J_DATABASE=<your database, if not the default> \
+MCP_ALLOW_CYPHER=1 \
+node dist/index.js
+```
+
+Nothing else is needed: the schema the Cypher tools describe is read from your
+database at startup, not shipped with the server, so it reflects your labels,
+properties and counts. A database without a `DBInfo` node is fine; the schema
+simply names no release.
+
+To skip the extraction on later starts, save your database's schema with
+`extract-schema` and set `NEO4J_SCHEMA_FILE` to it. The fingerprint check is
+what makes this safe to get wrong: a schema saved from the release graph will
+not match your database, so it is not used against it, and nor is your own
+snapshot once your database has changed since it was taken — in both cases the
+server warns and reads the schema live.
 
 ## Usage
 
