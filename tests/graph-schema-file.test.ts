@@ -50,12 +50,31 @@ let snapshot: GraphSchema;
 let warn: MockInstance<typeof logger.warn>;
 let info: MockInstance<typeof logger.info>;
 
-/** A snapshot of the scripted database, taken by the extractor itself. */
+/**
+ * A property row that only a file can carry: the scripted database never
+ * reports it. Node properties are neither fingerprinted nor checked against
+ * the fingerprint, so planting it leaves the file valid and matching -- and
+ * whether a served schema has it says, deterministically, whether the file
+ * was served. (Timestamps cannot: a live extraction can finish in the same
+ * millisecond the snapshot was taken.)
+ */
+const PLANTED = "plantedOnlyInTheFile";
+const fromFile = (schema: GraphSchema) =>
+  schema.nodeTypeProperties.some(p => p.propertyName === PLANTED);
+
+/** A snapshot of the scripted database, taken by the extractor itself, marked. */
 async function takeSnapshot(): Promise<GraphSchema> {
-  const schema = await fetchGraphSchema();
+  const schema = structuredClone(await fetchGraphSchema());
   _resetGraphSchemaCache();
   fake.sessions.length = 0;
-  return structuredClone(schema);
+  schema.nodeTypeProperties.push({
+    nodeType: ":`Pathway`",
+    nodeLabels: ["Pathway"],
+    propertyName: PLANTED,
+    propertyTypes: ["String"],
+    mandatory: false,
+  });
+  return schema;
 }
 
 function writeSnapshot(content: unknown): string {
@@ -69,6 +88,11 @@ const warnings = () => warn.mock.calls.map(c => JSON.stringify(c));
 
 describe("NEO4J_SCHEMA_FILE", () => {
   beforeEach(async () => {
+    // Frozen, so the file and a live extraction carry the same timestamps:
+    // nothing below may tell them apart by time. CI once finished a live
+    // extraction in the same millisecond as the snapshot.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-14T12:00:00.000Z"));
     process.env.NEO4J_URI = "bolt://127.0.0.1:7687";
     process.env.MCP_ALLOW_CYPHER = "1";
     delete process.env.NEO4J_SCHEMA_FILE;
@@ -83,6 +107,7 @@ describe("NEO4J_SCHEMA_FILE", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     warn.mockRestore();
     info.mockRestore();
     _resetGraphSchemaCache();
@@ -99,6 +124,7 @@ describe("NEO4J_SCHEMA_FILE", () => {
     const schema = await fetchGraphSchema();
 
     expect(schema).toEqual(snapshot);
+    expect(fromFile(schema)).toBe(true);
     expect(expensiveRun()).toEqual([]);
     // It did check: the cheap fingerprint queries ran, read-only.
     const run = queriesRun(fake);
@@ -333,7 +359,7 @@ describe("NEO4J_SCHEMA_FILE", () => {
     // describes the database that answered, not the file.
     expect(expensiveRun().length).toBeGreaterThan(0);
     expect(schema.unavailable).toEqual([]);
-    expect(schema.fetchedAt).not.toBe(snapshot.fetchedAt);
+    expect(fromFile(schema)).toBe(false);
 
     const said = warnings().join("\n");
     expect(said).toContain("schema.json");
@@ -344,6 +370,7 @@ describe("NEO4J_SCHEMA_FILE", () => {
     process.env.NEO4J_SCHEMA_FILE = join(dir, "missing.json");
     const schema = await fetchGraphSchema();
     expect(expensiveRun().length).toBeGreaterThan(0);
+    expect(fromFile(schema)).toBe(false);
     expect(schema.unavailable).toEqual([]);
     expect(warnings().join("\n")).toContain("missing.json");
   });
