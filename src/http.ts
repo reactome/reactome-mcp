@@ -55,11 +55,18 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
   // documentation said the server refuses to start. It does over stdio,
   // where createServer runs once at boot. It did not here, which is the
   // transport that is actually deployed.
-  //
-  // Also what /health reports as `graphAccess`: whether sessions on this
-  // instance are offered the Cypher tools, so an operator can see which way
-  // the gate went without reading the environment.
-  const graphAccess = resolveToolGroups().includes(GRAPH_GROUP);
+  resolveToolGroups();
+
+  // Whether a session opened now would be offered the Cypher tools. Asked per
+  // request, like the sessions themselves, so /health cannot report a value
+  // captured at startup that a new session no longer matches.
+  const graphAccess = (): boolean => {
+    try {
+      return resolveToolGroups().includes(GRAPH_GROUP);
+    } catch {
+      return false;
+    }
+  };
 
   // Defaults to 127.0.0.1 and turns on DNS-rebinding protection for localhost
   // hosts, which is what stops a web page in the user's browser from driving
@@ -233,7 +240,7 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
       sessions: sessions.size,
       contentService: CONTENT_SERVICE_URL,
       analysisService: ANALYSIS_SERVICE_URL,
-      graphAccess,
+      graphAccess: graphAccess(),
     });
   });
 
@@ -244,7 +251,7 @@ export function startHttpServer(port: number, host: string = MCP_HTTP_HOST): Pro
         port,
         contentService: CONTENT_SERVICE_URL,
         analysisService: ANALYSIS_SERVICE_URL,
-        graphAccess,
+        graphAccess: graphAccess(),
       });
       resolve(http);
     });

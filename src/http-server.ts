@@ -28,9 +28,8 @@ if (!port) {
 // past the .catch below and killed the process with a raw stack trace. Dying
 // was correct; dying without the log line that says why was not.
 //
-// The graph schema warm-up decides for itself whether graph access is on --
-// this entrypoint once decided by NEO4J_URI alone, and opened a connection on
-// an instance that had not opted in.
+// The graph schema warm-up decides for itself whether graph access is on;
+// this entrypoint does not.
 Promise.resolve()
   .then(() => startHttpServer(port, MCP_HTTP_HOST))
   .then(() => warmGraphSchema())

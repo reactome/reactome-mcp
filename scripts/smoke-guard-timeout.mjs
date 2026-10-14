@@ -5,7 +5,7 @@
 // Keep the range modest: range() builds its list before the transaction guard
 // gets a look in, so a huge one costs the database memory regardless.
 
-import { rejectWriteThroughCalls } from "../dist/tools/cypher-guard.js";
+import { assertReadOnlyQuery } from "../dist/tools/cypher-guard.js";
 import { runRead, closeDriver } from "../dist/clients/neo4j.js";
 
 let failures = 0;
@@ -15,7 +15,7 @@ for (const query of [
   "LOAD CSV FROM 'http://example.invalid/x.csv' AS row RETURN row",
 ]) {
   try {
-    rejectWriteThroughCalls(query);
+    assertReadOnlyQuery(query);
     console.log("FAIL: guard did not reject:", query);
     failures++;
   } catch (e) {
@@ -24,7 +24,7 @@ for (const query of [
 }
 
 try {
-  rejectWriteThroughCalls("MATCH (n:Pathway) RETURN n LIMIT 1");
+  assertReadOnlyQuery("MATCH (n:Pathway) RETURN n LIMIT 1");
   console.log("OK: guard accepts a plain read query");
 } catch (e) {
   console.log("FAIL: guard rejected a plain read query:", e.message);

@@ -99,7 +99,14 @@ export interface GraphSchema {
  */
 const SCHEMA_FETCH_TIMEOUT_MS = 120_000;
 
-let schemaCache: GraphSchema | null = null;
+/**
+ * How long a schema with unavailable sections is served before those
+ * sections are tried again. Not on every call: a section that failed by
+ * timing out would make every call wait for the timeout again.
+ */
+export const SCHEMA_RETRY_AFTER_MS = 5 * 60_000;
+
+let schemaCache: { schema: GraphSchema; at: number } | null = null;
 let schemaPending: Promise<GraphSchema> | null = null;
 
 type Section = keyof Omit<GraphSchema, "fetchedAt" | "unavailable">;
@@ -256,28 +263,38 @@ const EMPTY: Omit<GraphSchema, "fetchedAt" | "unavailable"> = {
 };
 
 /**
- * Fetch the schema, once. Cached in memory after the first call that reads
- * anything; concurrent first callers share one fetch.
+ * Fetch the schema. Cached in memory; concurrent callers share one fetch.
+ *
+ * A complete schema is cached for the life of the process. One with
+ * unavailable sections is served as it is for `SCHEMA_RETRY_AFTER_MS`, and
+ * then the failed sections -- only those -- are read again, so a section
+ * that timed out during the startup warm-up is not missing for good.
  *
  * A fetch in which **no** section could be read -- the database is down, the
  * credentials are wrong -- throws and is not cached, so the next call tries
- * again instead of serving an empty schema for the life of the process.
+ * again instead of serving an empty schema.
  */
 export async function fetchGraphSchema(): Promise<GraphSchema> {
-  if (schemaCache) return schemaCache;
+  if (schemaCache) {
+    const { schema, at } = schemaCache;
+    if (schema.unavailable.length === 0) return schema;
+    if (Date.now() - at < SCHEMA_RETRY_AFTER_MS) return schema;
+  }
   if (schemaPending) return schemaPending;
 
+  const previous = schemaCache?.schema;
   const start = Date.now();
   schemaPending = (async () => {
     try {
-      const names = Object.keys(SECTIONS) as Section[];
+      const names = previous
+        ? previous.unavailable.map(u => u.section as Section)
+        : (Object.keys(SECTIONS) as Section[]);
       const settled = await Promise.allSettled(names.map(name => SECTIONS[name]()));
 
-      const result: GraphSchema = {
-        fetchedAt: new Date().toISOString(),
-        ...structuredClone(EMPTY),
-        unavailable: [],
-      };
+      const result: GraphSchema = previous
+        ? { ...previous, unavailable: [] }
+        : { fetchedAt: "", ...structuredClone(EMPTY), unavailable: [] };
+      result.fetchedAt = new Date().toISOString();
       settled.forEach((outcome, i) => {
         const name = names[i] as Section;
         if (outcome.status === "fulfilled") {
@@ -287,20 +304,21 @@ export async function fetchGraphSchema(): Promise<GraphSchema> {
         }
       });
 
-      if (result.unavailable.length === names.length) {
+      if (!previous && result.unavailable.length === names.length) {
         throw new Error(
           `Could not read the graph schema: ${result.unavailable[0]?.reason ?? "no section answered"}`
         );
       }
 
-      logger.info("graph schema fetched", {
+      logger.info(previous ? "graph schema sections retried" : "graph schema fetched", {
         durationMs: Date.now() - start,
+        sections: names.length,
         nodeCount: result.stats.nodeCount,
         labels: Object.keys(result.stats.labels).length,
         unavailable: result.unavailable.map(u => u.section),
       });
 
-      schemaCache = result;
+      schemaCache = { schema: result, at: Date.now() };
       return result;
     } finally {
       schemaPending = null;

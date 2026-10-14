@@ -9,18 +9,16 @@
  * This is the one predicate. Every surface that touches the graph asks it --
  * tool registration, the `reactome://graph/schema` resource, the server
  * instructions, the startup schema warm-up, and `getDriver()` itself, which
- * refuses to construct a driver when it is false. Asking it at the driver as
- * well as at each surface is deliberate: the last gate this server had was
- * consulted in four places, and the HTTP entrypoint -- the one actually
- * hosted -- opened a connection on `NEO4J_URI` alone. A door that forgets to
- * ask still cannot get a driver.
+ * refuses to construct a driver (or load the library) when it is false.
+ * Asking at the driver as well as at each surface means a surface that
+ * forgets to ask still cannot get a driver. Every entrypoint and factory is
+ * exercised against it in `tests/graph-access-gate.test.ts`.
  *
  * Two variables rather than one, on purpose. A connection string can be set
  * for many reasons and is easy to inherit from a shared environment file;
  * it is not consent to publish arbitrary query access. Forgetting the opt-in
  * costs a missing tool on an internal instance, which is visible and
- * harmless. Forgetting it the other way round on a public instance would cost
- * the database, and the website in front of it.
+ * harmless; the gate is designed so that the mistake goes that way.
  *
  * Read from the environment on every call rather than captured at import, so
  * there is one copy of the answer and it cannot go stale.

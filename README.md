@@ -115,11 +115,16 @@ Optional:
 | `CYPHER_QUERY_TIMEOUT_MS` | `30000` | server-side transaction timeout for `reactome_cypher_*` queries |
 
 **Read-only safeguards.** Every query runs in a READ-mode session, so the
-database refuses `CREATE`, `MERGE`, `DELETE`, `SET` and `REMOVE`. `LOAD CSV` and
-APOC procedures that can write or fetch from outside the graph are refused
-before they reach the database. Each query runs under a server-side timeout,
-and rows, row width and total response size are capped. These are guardrails;
-the boundary is that graph access is not enabled where the public can reach it.
+database refuses `CREATE`, `MERGE`, `DELETE`, `SET` and `REMOVE`. Before a
+query reaches the database it is checked against an allowlist: `CALL` only for
+the built-in schema procedures (`db.labels`, `db.relationshipTypes`,
+`db.propertyKeys`, `db.schema.*`, `db.indexes`, `db.constraints`,
+`dbms.components`), `SHOW` only for indexes and constraints, and no APOC,
+`LOAD CSV`, `USE` or `TERMINATE`. Each query runs under a server-side timeout;
+rows are streamed and reading stops at `max_rows`, with the rest discarded on
+the server, and row width and total response size are capped. These are
+guardrails; the boundary is that graph access is not enabled where the public
+can reach it.
 
 ### Running against the Reactome graph database container
 

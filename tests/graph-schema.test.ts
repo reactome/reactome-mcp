@@ -19,7 +19,11 @@ vi.mock("neo4j-driver", async () => {
 });
 
 import { queriesRun } from "./helpers/fake-neo4j.js";
-import { fetchGraphSchema, _resetGraphSchemaCache } from "../src/graph/schema.js";
+import {
+  fetchGraphSchema,
+  _resetGraphSchemaCache,
+  SCHEMA_RETRY_AFTER_MS,
+} from "../src/graph/schema.js";
 import { formatGraphSchemaMarkdown } from "../src/graph/format-schema.js";
 import { closeDriver } from "../src/clients/neo4j.js";
 
@@ -210,6 +214,56 @@ describe("fetchGraphSchema on Neo4j 4.4 Community without APOC", () => {
     const md = formatGraphSchemaMarkdown(schema);
     expect(md).toContain("Unavailable");
     expect(md).toContain("nodeTypeProperties");
+  });
+
+  it("retries a failed section on a later fetch rather than caching the failure for good", async () => {
+    // A section that timed out during the startup warm-up used to stay
+    // "unavailable" for the life of the process.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      let failing = true;
+      fake.respond = community44({
+        "db.schema.nodeTypeProperties": () => {
+          if (failing) throw new Error("The transaction has been terminated (timeout)");
+          return [
+            {
+              nodeType: ":`Pathway`",
+              nodeLabels: ["Pathway"],
+              propertyName: "stId",
+              propertyTypes: ["String"],
+              mandatory: true,
+            },
+          ];
+        },
+      });
+
+      const first = await fetchGraphSchema();
+      expect(first.unavailable.map(u => u.section)).toEqual(["nodeTypeProperties"]);
+
+      // Straight away: served from cache, not retried on every call.
+      const before = queriesRun(fake).length;
+      await fetchGraphSchema();
+      expect(queriesRun(fake).length).toBe(before);
+
+      // Later: only the failed section is read again, and it now succeeds.
+      failing = false;
+      vi.setSystemTime(Date.now() + SCHEMA_RETRY_AFTER_MS + 1);
+      const later = await fetchGraphSchema();
+      expect(later.unavailable).toEqual([]);
+      expect(later.nodeTypeProperties).toHaveLength(1);
+      expect(later.stats.labels.Pathway).toBe(2_000);
+      const rerun = queriesRun(fake).slice(before);
+      expect(rerun.length).toBeGreaterThan(0);
+      expect(rerun.every(q => q.includes("db.schema.nodeTypeProperties"))).toBe(true);
+
+      // Complete now, so cached for good.
+      vi.setSystemTime(Date.now() + SCHEMA_RETRY_AFTER_MS * 10);
+      const settledCount = queriesRun(fake).length;
+      expect(await fetchGraphSchema()).toBe(later);
+      expect(queriesRun(fake).length).toBe(settledCount);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("refuses rather than caching an empty schema when nothing answers", async () => {

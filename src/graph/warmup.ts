@@ -12,9 +12,8 @@ import { GRAPH_GROUP, resolveToolGroups } from "../tools/index.js";
  * `cypher` group withheld, nothing could read that cache, and warming it would
  * open a database connection for nobody.
  *
- * The decision lives here rather than at each call site. The previous gate
- * was asked by each entrypoint for itself, and the HTTP entrypoint asked the
- * wrong question.
+ * The decision lives here rather than at each call site, so every entrypoint
+ * makes the same one.
  */
 export function warmGraphSchema(): void {
   let offered: boolean;

@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { runRead } from "../clients/neo4j.js";
+import { runRead, runReadLimited } from "../clients/neo4j.js";
 import { fetchGraphSchema } from "../graph/schema.js";
 import { formatGraphSchemaMarkdown } from "../graph/format-schema.js";
 import { logger } from "../logger.js";
-import { rejectWriteThroughCalls } from "./cypher-guard.js";
+import { assertReadOnlyQuery } from "./cypher-guard.js";
 import { isGraphAccessEnabled } from "../graph/gate.js";
 
 const MAX_QUERY_CHARS = 50_000;
@@ -82,7 +82,7 @@ export function registerCypherTools(server: McpServer) {
 
   server.tool(
     "reactome_cypher_query",
-    "Run a read-only Cypher query against the Reactome graph database (Neo4j). Call reactome_cypher_schema first; never guess labels or properties. The session runs in READ mode, which rejects CREATE/MERGE/DELETE/SET/REMOVE. LOAD CSV and APOC procedures that can write or fetch from outside the graph are rejected before execution. A server-side timeout terminates long queries. Row count, per-row size and total response size are capped, so always include a LIMIT and return specific properties (RETURN p.stId, p.displayName) rather than whole nodes.",
+    "Run a read-only Cypher query against the Reactome graph database (Neo4j). Call reactome_cypher_schema first; never guess labels or properties. The session runs in READ mode, which rejects CREATE/MERGE/DELETE/SET/REMOVE. CALL is allowed only for the built-in schema procedures (db.labels, db.schema.*, db.indexes, ...); APOC, other procedures, LOAD CSV, USE and SHOW other than indexes/constraints are rejected before execution. A server-side timeout terminates long queries. Rows are streamed and reading stops at max_rows; per-row size and total response size are also capped, so always include a LIMIT and return specific properties (RETURN p.stId, p.displayName) rather than whole nodes.",
     {
       query: z
         .string()
@@ -123,14 +123,24 @@ export function registerCypherTools(server: McpServer) {
         ),
     },
     async ({ query, params, max_rows, max_row_chars, max_total_chars }) => {
-      rejectWriteThroughCalls(query);
+      assertReadOnlyQuery(query);
       logger.info("cypher_query", { chars: query.length, max_rows });
-      const rows = await runRead<Record<string, unknown>>(query, params ?? {});
+      // Streamed and cut off at max_rows + 1 -- the cap is applied while
+      // reading, not after the whole result has been pulled into memory.
+      const { rows, more } = await runReadLimited<Record<string, unknown>>(
+        query,
+        params ?? {},
+        max_rows
+      );
       const { output, stats } = capCypherRows(rows, max_rows, max_row_chars, max_total_chars);
 
       const notes: string[] = [];
-      notes.push(`**Rows returned:** ${output.length} of ${rows.length}`);
-      if (stats.rowCountTruncated) notes.push(`(row-count cap: ${max_rows})`);
+      notes.push(`**Rows returned:** ${output.length}`);
+      if (more) {
+        notes.push(
+          `(more rows exist; reading stopped at the max_rows cap of ${max_rows} -- add a LIMIT, ORDER BY or a narrower MATCH)`
+        );
+      }
       if (stats.rowsWidthTruncated > 0)
         notes.push(`**Wide rows summarized:** ${stats.rowsWidthTruncated}`);
       if (stats.stoppedAtTotal)

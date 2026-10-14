@@ -102,9 +102,8 @@ export function permittedGroups(groups: readonly ToolGroup[]): ToolGroup[] {
  * deployment names the groups it means to publish.
  *
  * **This is a registration switch, not a documentation one.** A tool that is
- * described nowhere but still answers is exactly the divergence that cost
- * this repo a public Cypher surface and a server advertising tools it had not
- * registered: what a server *offers* must be the same fact as what it *says*,
+ * described nowhere but still answers, or one described but not registered,
+ * is a divergence: what a server *offers* must be the same fact as what it *says*,
  * and the only way to be sure is for the unwanted tool not to exist on the
  * instance.
  *

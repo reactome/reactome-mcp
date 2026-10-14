@@ -12,23 +12,30 @@ import type { FakeNeo4jState } from "./helpers/fake-neo4j.js";
  * an arbitrary query from the internet can take the database -- and the
  * website in front of it -- down.
  *
- * The gate is `NEO4J_URI` set AND `MCP_ALLOW_CYPHER=1`. The last time this
- * server had a gate, it was consulted in four places and one of them -- the
- * HTTP entrypoint, which is the one actually hosted -- still opened a
- * connection on `NEO4J_URI` alone. So these tests do not check the predicate
- * once and trust the call sites. They drive **every** surface, through every
- * entrypoint and factory, in every combination of the two variables, and
- * count driver constructions on a fake `neo4j-driver` that cannot open a
- * socket. Each surface is asserted in both directions: "absent when closed"
- * alone would pass against a build that never offers graph access at all.
+ * The gate is `NEO4J_URI` set AND `MCP_ALLOW_CYPHER=1`. These tests do not
+ * check the predicate once and trust the call sites: they drive **every**
+ * surface, through every entrypoint and factory, in every combination of the
+ * two variables, and count both loads of `neo4j-driver` and driver
+ * constructions on a fake that cannot open a socket. Each surface is asserted
+ * in both directions: "absent when closed" alone would pass against a build
+ * that never offers graph access at all. A new entrypoint belongs here.
  */
 
 const fake = vi.hoisted((): FakeNeo4jState => ({ drivers: [], sessions: [], respond: () => [] }));
 
-vi.mock("neo4j-driver", async () => {
-  const { fakeNeo4jModule } = await import("./helpers/fake-neo4j.js");
-  return fakeNeo4jModule(fake);
-});
+/**
+ * Registered per test, after `vi.resetModules()`, rather than once with
+ * `vi.mock`: a hoisted mock's factory runs once per file, so it could not
+ * count whether a given entrypoint loaded `neo4j-driver` at all. Re-registered
+ * like this, the factory runs on the first import after each reset, and
+ * `fake.moduleLoads` says whether anything imported it.
+ */
+function mockDriverModule() {
+  vi.doMock("neo4j-driver", async () => {
+    const { fakeNeo4jModule } = await import("./helpers/fake-neo4j.js");
+    return fakeNeo4jModule(fake);
+  });
+}
 
 // The stdio entrypoint connects a transport on import. This one talks to
 // nothing, so importing `src/index.ts` runs the real startup path -- server
@@ -97,6 +104,7 @@ function resetFake() {
   fake.drivers.length = 0;
   fake.sessions.length = 0;
   fake.respond = () => [];
+  fake.moduleLoads = 0;
 }
 
 /** Let fire-and-forget startup work (the schema warm-up) run to completion. */
@@ -129,6 +137,7 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
     applyEnv(env);
     resetFake();
     vi.resetModules();
+    mockDriverModule();
   });
 
   afterEach(() => {
@@ -211,12 +220,14 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
   it(`the driver factory ${open ? "constructs a driver" : "refuses to construct one"}`, async () => {
     const { getDriver, runRead } = await import("../src/clients/neo4j.js");
     if (open) {
-      expect(getDriver()).toBeDefined();
+      expect(await getDriver()).toBeDefined();
       expect(fake.drivers).toHaveLength(1);
     } else {
-      expect(() => getDriver()).toThrow(/MCP_ALLOW_CYPHER/);
+      await expect(getDriver()).rejects.toThrow(/MCP_ALLOW_CYPHER/);
       await expect(runRead("RETURN 1")).rejects.toThrow(/MCP_ALLOW_CYPHER/);
       expect(fake.drivers).toHaveLength(0);
+      // Refused before the library is even loaded.
+      expect(fake.moduleLoads).toBe(0);
     }
   });
 
@@ -224,6 +235,8 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
     await import("../src/index.js");
     await settle();
     expect(fake.drivers).toHaveLength(open ? 1 : 0);
+    // A closed instance never loads neo4j-driver at all.
+    expect(fake.moduleLoads).toBe(open ? 1 : 0);
     if (open) {
       // The warm-up ran, read-only, on the dedicated graph.
       expect(fake.drivers[0]?.uri).toBe(URI);
@@ -233,14 +246,15 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
   });
 
   it(`the HTTP entrypoint ${open ? "warms the schema over one driver" : "never constructs a driver"}`, async () => {
-    // src/http-server.ts is the entrypoint a hosted instance runs, and the one
-    // the previous gate missed. Its transport is stubbed so nothing binds;
-    // everything it does after the server starts is real.
+    // src/http-server.ts is the entrypoint a hosted instance runs. Its
+    // transport is stubbed so nothing binds; everything it does after the
+    // server starts is real.
     vi.doMock("../src/http.js", () => ({ startHttpServer: vi.fn(async () => ({})) }));
     process.env.MCP_HTTP_PORT = "4999";
     await import("../src/http-server.js");
     await settle();
     expect(fake.drivers).toHaveLength(open ? 1 : 0);
+    expect(fake.moduleLoads).toBe(open ? 1 : 0);
   });
 
   it(`startHttpServer sessions ${open ? "offer" : "withhold"} graph access, and construct no driver`, async () => {
@@ -303,8 +317,9 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
       }
       // An operator can see which way the gate went without reading the env.
       expect(health.graphAccess).toBe(open);
-      // Serving sessions is not a reason to connect either.
+      // Serving sessions is not a reason to connect, or to load the driver.
       expect(fake.drivers).toHaveLength(0);
+      expect(fake.moduleLoads).toBe(0);
     } finally {
       await new Promise(resolve => http.close(resolve));
     }
@@ -316,6 +331,7 @@ describe("graph access gate: open, but the cypher group withheld", () => {
     applyEnv({ NEO4J_URI: URI, MCP_ALLOW_CYPHER: "1", MCP_TOOL_GROUPS: "search,pathway" });
     resetFake();
     vi.resetModules();
+    mockDriverModule();
   });
 
   afterEach(() => {
@@ -365,5 +381,41 @@ describe("graph access gate: structure", () => {
   it("keeps neo4j-driver as a declared dependency", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
     expect(pkg.dependencies["neo4j-driver"]).toBeDefined();
+  });
+});
+
+describe("graph access gate: /health reports the gate as it is now", () => {
+  beforeEach(() => {
+    applyEnv({});
+    resetFake();
+    vi.resetModules();
+    mockDriverModule();
+  });
+
+  afterEach(() => {
+    restoreEnv();
+    vi.resetModules();
+  });
+
+  it("follows the environment per request, as sessions do", async () => {
+    // Sessions are built per request and ask the gate each time, so a value
+    // captured at startup could disagree with what a new session is offered.
+    const { startHttpServer } = await import("../src/http.js");
+    const http = await startHttpServer(0, "127.0.0.1");
+    try {
+      const { port } = http.address() as AddressInfo;
+      const health = async () =>
+        ((await (await fetch(`http://127.0.0.1:${port}/health`)).json()) as Record<string, unknown>)
+          .graphAccess;
+
+      expect(await health()).toBe(false);
+      process.env.NEO4J_URI = URI;
+      process.env.MCP_ALLOW_CYPHER = "1";
+      expect(await health()).toBe(true);
+      delete process.env.MCP_ALLOW_CYPHER;
+      expect(await health()).toBe(false);
+    } finally {
+      await new Promise(resolve => http.close(resolve));
+    }
   });
 });

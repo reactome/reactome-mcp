@@ -66,18 +66,46 @@ describe("reactome_cypher_* tools", () => {
       fakeServer.invoke("reactome_cypher_query", {
         query: "CALL apoc.periodic.iterate('MATCH (n) RETURN n', 'DETACH DELETE n', {})",
       })
-    ).rejects.toThrow(/bypass READ-mode/);
+    ).rejects.toThrow(/Query rejected/);
     expect(fake.drivers).toHaveLength(0);
     expect(fake.sessions).toHaveLength(0);
   });
 
-  it("caps the rows it returns", async () => {
-    fake.respond = () => Array.from({ length: 500 }, (_, i) => ({ i }));
+  it("stops reading at max_rows + 1 rather than materialising the whole result", async () => {
+    // `MATCH (n) RETURN n` on the Reactome graph is ~3M nodes. Capping after
+    // the fact pulled every one of them into this process first.
+    let produced = 0;
+    fake.respond = function* () {
+      for (let i = 0; i < 3_000_000; i++) {
+        produced++;
+        yield { i };
+      }
+    };
     const result = await fakeServer.invoke("reactome_cypher_query", {
-      query: "UNWIND range(1, 500) AS i RETURN i",
+      query: "MATCH (n) RETURN n",
       max_rows: 10,
     });
-    expect(textOf(result)).toContain("**Rows returned:** 10 of 500");
+
+    const run = fake.sessions[0]?.runs[0];
+    expect(run?.pulled).toBe(11);
+    expect(run?.cancelled).toBe(true);
+    expect(produced).toBeLessThanOrEqual(11);
+    // And the driver is asked to fetch in batches no bigger than that.
+    expect(Number(fake.sessions[0]?.config.fetchSize)).toBeLessThanOrEqual(11);
+
+    expect(textOf(result)).toContain("**Rows returned:** 10");
+    expect(textOf(result)).toMatch(/more rows exist/);
+  });
+
+  it("reports an exact count, and reads to the end, when the result fits", async () => {
+    fake.respond = () => [{ i: 1 }, { i: 2 }, { i: 3 }];
+    const result = await fakeServer.invoke("reactome_cypher_query", {
+      query: "UNWIND [1,2,3] AS i RETURN i",
+      max_rows: 10,
+    });
+    expect(textOf(result)).toContain("**Rows returned:** 3");
+    expect(textOf(result)).not.toMatch(/more rows exist/);
+    expect(fake.sessions[0]?.runs[0]?.cancelled).toBe(false);
   });
 
   it("refuses a max_rows above the cap, before running anything", () => {

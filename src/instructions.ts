@@ -96,9 +96,9 @@ This instance can query the Reactome graph database directly. Use it for what th
 2. Use \`reactome_cypher_sample\` on a label to see a representative node.
 3. Run the query with \`reactome_cypher_query\`:
    - It runs in a READ-mode session; write clauses are refused by the database.
-   - \`LOAD CSV\` and APOC procedures that write or fetch from outside the graph are refused before execution.
+   - \`CALL\` is allowed only for the built-in schema procedures (\`db.labels\`, \`db.schema.*\`, \`db.indexes\`, \`db.constraints\`, \`dbms.components\`, ...), and \`SHOW\` only for indexes and constraints. APOC, \`LOAD CSV\` and \`USE\` are refused.
    - A server-side timeout ends long queries. Always include a \`LIMIT\`, and anchor on an indexed property (for example \`stId\` or \`dbId\`) rather than scanning a whole label.
-   - Return specific properties (\`RETURN p.stId, p.displayName\`) rather than whole nodes; rows and response size are capped.
+   - Return specific properties (\`RETURN p.stId, p.displayName\`) rather than whole nodes; reading stops at \`max_rows\`, and response size is capped.
 
 **When not to use it:** lookups by ID or name, pathway hierarchies and enrichment — the REST tools are cached, cheaper, and format the answer for you.
 `.trim();
@@ -107,10 +107,9 @@ This instance can query the Reactome graph database directly. Use it for what th
  * The instructions a client reads on connecting.
  *
  * **It describes the groups this instance actually registered, and nothing
- * else.** The last time these two facts were allowed to drift apart, the
- * server told every client to call `reactome_cypher_query` on an instance
- * that had declined to register it. That is invisible to any check which
- * asks the server what it can do, because the answer *is* the claim.
+ * else.** A server describing tools it has not registered is invisible to
+ * any check which asks the server what it can do, because the answer *is*
+ * the claim.
  *
  * So the category list is built from the same `ToolGroup` values that drive
  * registration, and `tests/tool-groups.test.ts` asserts a restricted
