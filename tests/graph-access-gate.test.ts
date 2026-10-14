@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { AddressInfo } from "node:net";
 import type { FakeNeo4jState } from "./helpers/fake-neo4j.js";
@@ -35,6 +36,35 @@ function mockDriverModule() {
     const { fakeNeo4jModule } = await import("./helpers/fake-neo4j.js");
     return fakeNeo4jModule(fake);
   });
+  mockFileReads();
+}
+
+/**
+ * A schema snapshot named by NEO4J_SCHEMA_FILE in every case below. With the
+ * gate closed it must not even be read: the file describes the graph, and an
+ * instance without graph access has no business with it.
+ */
+const SNAPSHOT_DIR = mkdtempSync(join(tmpdir(), "gate-snapshot-"));
+const SNAPSHOT = join(SNAPSHOT_DIR, "schema.json");
+writeFileSync(SNAPSHOT, JSON.stringify({ schemaFormat: 1 }));
+afterAll(() => rmSync(SNAPSHOT_DIR, { recursive: true, force: true }));
+
+const fileReads = vi.hoisted(() => [] as string[]);
+const snapshotReads = () => fileReads.filter(f => f === SNAPSHOT).length;
+
+/** Count reads through node:fs/promises, re-registered per test like the driver. */
+function mockFileReads() {
+  vi.doMock("node:fs/promises", async importOriginal => {
+    const actual = await importOriginal<typeof import("node:fs/promises")>();
+    const readFile = ((...args: Parameters<typeof actual.readFile>) => {
+      const [path] = args;
+      fileReads.push(
+        typeof path === "string" ? path : path instanceof URL ? path.pathname : "(file handle)"
+      );
+      return actual.readFile(...args);
+    }) as typeof actual.readFile;
+    return { ...actual, default: { ...actual, readFile }, readFile };
+  });
 }
 
 // The stdio entrypoint connects a transport on import. This one talks to
@@ -51,8 +81,33 @@ vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
   },
 }));
 
+/**
+ * Each test gets a fresh copy of the driver module (vi.resetModules), and each
+ * copy hooks process shutdown once. In a real process there is one copy; here
+ * the hooks are removed after every test so they do not pile up across them.
+ */
+const SHUTDOWN_EVENTS = ["SIGINT", "SIGTERM", "beforeExit"] as const;
+let shutdownListeners: Map<string, unknown[]>;
+beforeEach(() => {
+  shutdownListeners = new Map(SHUTDOWN_EVENTS.map(e => [e, process.listeners(e)]));
+});
+afterEach(() => {
+  for (const event of SHUTDOWN_EVENTS) {
+    const before = shutdownListeners.get(event) ?? [];
+    for (const listener of process.listeners(event)) {
+      if (!before.includes(listener)) process.removeListener(event, listener);
+    }
+  }
+});
+
 const URI = "bolt://127.0.0.1:7687";
-const GRAPH_VARS = ["NEO4J_URI", "MCP_ALLOW_CYPHER", "MCP_TOOL_GROUPS", "MCP_HTTP_PORT"] as const;
+const GRAPH_VARS = [
+  "NEO4J_URI",
+  "MCP_ALLOW_CYPHER",
+  "MCP_TOOL_GROUPS",
+  "MCP_HTTP_PORT",
+  "NEO4J_SCHEMA_FILE",
+] as const;
 
 interface GateCase {
   name: string;
@@ -105,6 +160,7 @@ function resetFake() {
   fake.sessions.length = 0;
   fake.respond = () => [];
   fake.moduleLoads = 0;
+  fileReads.length = 0;
 }
 
 /** Let fire-and-forget startup work (the schema warm-up) run to completion. */
@@ -134,7 +190,7 @@ function recordingServer() {
 
 describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
   beforeEach(() => {
-    applyEnv(env);
+    applyEnv({ ...env, NEO4J_SCHEMA_FILE: SNAPSHOT });
     resetFake();
     vi.resetModules();
     mockDriverModule();
@@ -180,6 +236,7 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
 
     // Building a server is not a reason to connect: the driver is lazy.
     expect(fake.drivers).toHaveLength(0);
+    expect(snapshotReads()).toBe(0);
   });
 
   it(`registrars given every group explicitly still ${open ? "offer" : "withhold"} graph access`, async () => {
@@ -231,12 +288,28 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
     }
   });
 
+  it(`fetchGraphSchema, called directly, ${open ? "checks" : "never reads"} the schema file`, async () => {
+    // The warm-up asks the gate before calling it; this is the check inside,
+    // for a caller that does not.
+    const { fetchGraphSchema } = await import("../src/graph/schema.js");
+    const outcome = await fetchGraphSchema().then(
+      () => "served",
+      (error: unknown) => String(error)
+    );
+    expect(snapshotReads()).toBe(open ? 1 : 0);
+    if (!open) expect(outcome).toMatch(/MCP_ALLOW_CYPHER/);
+    expect(fake.drivers).toHaveLength(open ? 1 : 0);
+  });
+
   it(`the stdio entrypoint ${open ? "warms the schema over one driver" : "never constructs a driver"}`, async () => {
     await import("../src/index.js");
     await settle();
     expect(fake.drivers).toHaveLength(open ? 1 : 0);
     // A closed instance never loads neo4j-driver at all.
     expect(fake.moduleLoads).toBe(open ? 1 : 0);
+    // Nor reads the schema snapshot; an open one reads it once, to check it
+    // against the database before trusting it.
+    expect(snapshotReads()).toBe(open ? 1 : 0);
     if (open) {
       // The warm-up ran, read-only, on the dedicated graph.
       expect(fake.drivers[0]?.uri).toBe(URI);
@@ -255,6 +328,7 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
     await settle();
     expect(fake.drivers).toHaveLength(open ? 1 : 0);
     expect(fake.moduleLoads).toBe(open ? 1 : 0);
+    expect(snapshotReads()).toBe(open ? 1 : 0);
   });
 
   it(`startHttpServer sessions ${open ? "offer" : "withhold"} graph access, and construct no driver`, async () => {
@@ -320,6 +394,7 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
       // Serving sessions is not a reason to connect, or to load the driver.
       expect(fake.drivers).toHaveLength(0);
       expect(fake.moduleLoads).toBe(0);
+      expect(snapshotReads()).toBe(0);
     } finally {
       await new Promise(resolve => http.close(resolve));
     }
@@ -328,7 +403,12 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
 
 describe("graph access gate: open, but the cypher group withheld", () => {
   beforeEach(() => {
-    applyEnv({ NEO4J_URI: URI, MCP_ALLOW_CYPHER: "1", MCP_TOOL_GROUPS: "search,pathway" });
+    applyEnv({
+      NEO4J_URI: URI,
+      MCP_ALLOW_CYPHER: "1",
+      MCP_TOOL_GROUPS: "search,pathway",
+      NEO4J_SCHEMA_FILE: SNAPSHOT,
+    });
     resetFake();
     vi.resetModules();
     mockDriverModule();
@@ -353,6 +433,7 @@ describe("graph access gate: open, but the cypher group withheld", () => {
     await import("../src/index.js");
     await settle();
     expect(fake.drivers).toHaveLength(0);
+    expect(snapshotReads()).toBe(0);
   });
 });
 
@@ -376,6 +457,17 @@ describe("graph access gate: structure", () => {
     };
     walk(root);
     expect(importers).toEqual(["clients/neo4j.ts"]);
+  });
+
+  it("the extract-schema CLI builds no server and registers nothing", () => {
+    // The CLI connects without MCP_ALLOW_CYPHER because it is not an
+    // instance: it runs once, by hand, and serves nothing. That holds only
+    // while it cannot reach a tool, a resource or a transport.
+    const text = readFileSync(new URL("../src/cli/extract-schema.ts", import.meta.url), "utf8");
+    const imports = [...text.matchAll(/from\s+["']([^"']+)["']/g)].map(m => m[1]);
+    expect(imports.filter(i => /server|http|tools|resources|instructions/.test(i ?? ""))).toEqual(
+      []
+    );
   });
 
   it("keeps neo4j-driver as a declared dependency", () => {
@@ -417,5 +509,40 @@ describe("graph access gate: /health reports the gate as it is now", () => {
     } finally {
       await new Promise(resolve => http.close(resolve));
     }
+  });
+});
+
+describe("graph access gate: the extract-schema subcommand", () => {
+  const argv = process.argv;
+
+  beforeEach(() => {
+    applyEnv({});
+    resetFake();
+    vi.resetModules();
+    mockDriverModule();
+  });
+
+  afterEach(() => {
+    process.argv = argv;
+    process.exitCode = undefined;
+    restoreEnv();
+    vi.doUnmock("../src/cli/extract-schema.js");
+    vi.doUnmock("../src/server.js");
+    vi.resetModules();
+  });
+
+  it("runs the CLI instead of the server, and builds no server", async () => {
+    const runExtractSchema = vi.fn(async () => 0);
+    const createServer = vi.fn();
+    vi.doMock("../src/cli/extract-schema.js", () => ({ runExtractSchema }));
+    vi.doMock("../src/server.js", () => ({ createServer }));
+    process.argv = [argv[0] ?? "node", "dist/index.js", "extract-schema", "--help"];
+
+    await import("../src/index.js");
+    await settle();
+
+    expect(runExtractSchema).toHaveBeenCalledWith(["--help"]);
+    expect(createServer).not.toHaveBeenCalled();
+    expect(fake.drivers).toHaveLength(0);
   });
 });

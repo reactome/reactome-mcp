@@ -90,6 +90,15 @@ export function neo4jConnection(env: NodeJS.ProcessEnv = process.env) {
 }
 
 /**
+ * A graph schema saved by `reactome-mcp extract-schema`, served instead of
+ * extracting one when it describes the database at NEO4J_URI. Read only when
+ * graph access is on; see `src/graph/schema.ts`.
+ */
+export function neo4jSchemaFile(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return env.NEO4J_SCHEMA_FILE?.trim() || undefined;
+}
+
+/**
  * Server-side timeout on every Cypher query, in milliseconds. The database
  * terminates a transaction that runs longer.
  *

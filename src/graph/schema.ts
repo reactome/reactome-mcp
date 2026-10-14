@@ -1,5 +1,14 @@
+import { readFile } from "node:fs/promises";
 import { runRead } from "../clients/neo4j.js";
+import { neo4jSchemaFile } from "../config.js";
 import { logger } from "../logger.js";
+import { GRAPH_ACCESS_OFF, isGraphAccessEnabled } from "./gate.js";
+import {
+  parseSchemaSnapshot,
+  SCHEMA_FORMAT,
+  sourceMismatches,
+  type SchemaSource,
+} from "./schema-source.js";
 
 /**
  * The live graph schema, built from Neo4j's **built-in** procedures only.
@@ -44,11 +53,21 @@ import { logger } from "../logger.js";
  *
  * On that graph the whole fetch took about 65 s (2.96M nodes, 11.5M
  * relationships, 108 labels, 88 types, 5,669 label-level patterns), almost
- * all of it `db.schema.nodeTypeProperties()`. Hence the warm-up, and the
- * timeout below.
+ * all of it `db.schema.nodeTypeProperties()`. Hence the warm-up, the timeout
+ * below, and `NEO4J_SCHEMA_FILE` -- a schema saved earlier by
+ * `reactome-mcp extract-schema`, served instead when the database it was
+ * saved from is the one the server is pointed at (see `schema-source.ts`).
  */
 export interface GraphSchema {
+  /** The layout of this structure; see `SCHEMA_FORMAT`. */
+  schemaFormat: number;
+  /** When the schema was read -- or last re-read, for a retried section. */
   fetchedAt: string;
+  /**
+   * Which database this describes. Null only when the fingerprint itself
+   * could not be read, in which case `unavailable` names `source`.
+   */
+  source: SchemaSource | null;
   dbComponents: Array<{ name: string; versions: string[]; edition: string }>;
   stats: {
     nodeCount: number;
@@ -109,7 +128,7 @@ export const SCHEMA_RETRY_AFTER_MS = 5 * 60_000;
 let schemaCache: { schema: GraphSchema; at: number } | null = null;
 let schemaPending: Promise<GraphSchema> | null = null;
 
-type Section = keyof Omit<GraphSchema, "fetchedAt" | "unavailable">;
+type Section = keyof Omit<GraphSchema, "schemaFormat" | "fetchedAt" | "unavailable">;
 
 class SectionUnavailable extends Error {}
 
@@ -159,14 +178,50 @@ async function countEach(tokens: string[], pattern: (quoted: string) => string) 
   return Object.fromEntries(rows.map(r => [r.key, Number(r.count)]));
 }
 
+const COMPONENTS =
+  "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition";
+// Both totals are answered from the count store, not by scanning.
+const NODE_TOTAL = "MATCH (n) RETURN count(n) AS count";
+const REL_TOTAL = "MATCH ()-[r]->() RETURN count(r) AS count";
+// Reactome's graph has one DBInfo node; a curator or non-Reactome graph has
+// none, and this returns no row. Ordered so that a graph with several gives
+// the same answer every time.
+const RELEASE =
+  "MATCH (d:DBInfo) RETURN d.releaseNumber AS releaseNumber ORDER BY releaseNumber DESC LIMIT 1";
+
+/**
+ * The cheap part of the schema that identifies the database: four queries,
+ * none of which scans. This is what a saved schema is checked against before
+ * it is served; see `schema-source.ts`.
+ */
+export async function fetchSourceFingerprint(): Promise<SchemaSource> {
+  const [components, release, nodeTotal, relTotal] = await Promise.all([
+    firstThatWorks<{ versions?: string[]; edition?: string }>([COMPONENTS]),
+    firstThatWorks<{ releaseNumber: unknown }>([RELEASE]),
+    firstThatWorks<{ count: number }>([NODE_TOTAL]),
+    firstThatWorks<{ count: number }>([REL_TOTAL]),
+  ]);
+  const releaseNumber = release[0]?.releaseNumber;
+  return {
+    neo4jVersion: components[0]?.versions?.[0] ?? null,
+    neo4jEdition: components[0]?.edition ?? null,
+    ...(typeof releaseNumber === "number" || typeof releaseNumber === "string"
+      ? { releaseNumber }
+      : {}),
+    nodeCount: Number(nodeTotal[0]?.count ?? 0),
+    relCount: Number(relTotal[0]?.count ?? 0),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 async function fetchStats(): Promise<GraphSchema["stats"]> {
   const [labelRows, relRows, nodeTotal, relTotal] = await Promise.all([
     firstThatWorks<{ label: string }>(["CALL db.labels() YIELD label RETURN label"]),
     firstThatWorks<{ relationshipType: string }>([
       "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType",
     ]),
-    firstThatWorks<{ count: number }>(["MATCH (n) RETURN count(n) AS count"]),
-    firstThatWorks<{ count: number }>(["MATCH ()-[r]->() RETURN count(r) AS count"]),
+    firstThatWorks<{ count: number }>([NODE_TOTAL]),
+    firstThatWorks<{ count: number }>([REL_TOTAL]),
   ]);
   const [labels, relTypesCount] = await Promise.all([
     countEach(
@@ -220,10 +275,8 @@ async function fetchPatterns(): Promise<GraphSchema["patterns"]> {
 }
 
 const SECTIONS: { [K in Section]: () => Promise<GraphSchema[K]> } = {
-  dbComponents: () =>
-    firstThatWorks([
-      "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition",
-    ]),
+  source: fetchSourceFingerprint,
+  dbComponents: () => firstThatWorks([COMPONENTS]),
   stats: fetchStats,
   patterns: fetchPatterns,
   nodeTypeProperties: () =>
@@ -253,6 +306,8 @@ const SECTIONS: { [K in Section]: () => Promise<GraphSchema[K]> } = {
 };
 
 const EMPTY: Omit<GraphSchema, "fetchedAt" | "unavailable"> = {
+  schemaFormat: SCHEMA_FORMAT,
+  source: null,
   dbComponents: [],
   stats: { nodeCount: 0, relCount: 0, labels: {}, relTypesCount: {} },
   patterns: [],
@@ -273,8 +328,17 @@ const EMPTY: Omit<GraphSchema, "fetchedAt" | "unavailable"> = {
  * A fetch in which **no** section could be read -- the database is down, the
  * credentials are wrong -- throws and is not cached, so the next call tries
  * again instead of serving an empty schema.
+ *
+ * With `NEO4J_SCHEMA_FILE` set, the first fetch tries that file before
+ * extracting: it is served only if the live fingerprint matches the one it
+ * was saved with. Anything else is logged, naming why, and the schema is
+ * extracted as though no file were set.
+ *
+ * Asks the gate first, so with graph access off neither the database nor the
+ * file is touched.
  */
 export async function fetchGraphSchema(): Promise<GraphSchema> {
+  if (!isGraphAccessEnabled()) throw new Error(GRAPH_ACCESS_OFF);
   if (schemaCache) {
     const { schema, at } = schemaCache;
     if (schema.unavailable.length === 0) return schema;
@@ -286,6 +350,19 @@ export async function fetchGraphSchema(): Promise<GraphSchema> {
   const start = Date.now();
   schemaPending = (async () => {
     try {
+      const file = previous ? undefined : neo4jSchemaFile();
+      const saved = file ? await matchingSnapshot(file) : null;
+      if (saved) {
+        logger.info("graph schema served from file", {
+          file,
+          durationMs: Date.now() - start,
+          releaseNumber: saved.source?.releaseNumber,
+          nodeCount: saved.stats.nodeCount,
+        });
+        schemaCache = { schema: saved, at: Date.now() };
+        return saved;
+      }
+
       const names = previous
         ? previous.unavailable.map(u => u.section as Section)
         : (Object.keys(SECTIONS) as Section[]);
@@ -326,6 +403,30 @@ export async function fetchGraphSchema(): Promise<GraphSchema> {
   })();
 
   return schemaPending;
+}
+
+/**
+ * The schema saved in `file`, if it describes the database this server is
+ * pointed at; otherwise null, with a warning that says why not. A database
+ * that cannot be fingerprinted is not a match: unverified, the file could be
+ * describing anything.
+ */
+async function matchingSnapshot(file: string): Promise<GraphSchema | null> {
+  try {
+    const saved = parseSchemaSnapshot(await readFile(file, "utf8"));
+    const live = await fetchSourceFingerprint();
+    const differences = sourceMismatches(saved.source, live);
+    if (differences.length > 0) {
+      throw new Error(`it describes a different database (${differences.join("; ")})`);
+    }
+    return saved;
+  } catch (error) {
+    logger.warn("NEO4J_SCHEMA_FILE not used; extracting the schema from the database", {
+      file,
+      reason: message(error),
+    });
+    return null;
+  }
 }
 
 /** For tests -- clears both the cached value and any in-flight fetch. */

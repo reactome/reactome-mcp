@@ -163,7 +163,7 @@ export function registerCypherTools(server: McpServer) {
 
   server.tool(
     "reactome_cypher_schema",
-    "Introspect the Reactome graph schema: labels and relationship types with counts, which labels each relationship type connects, property names and types with mandatory flags, indexes and constraints. Read live from Neo4j's built-in schema procedures and cached for the life of the server (the server warms it at startup; a cold first call can take tens of seconds). Call this before writing Cypher. Sections the database could not provide are listed as unavailable rather than shown empty. For the full JSON, read the `reactome://graph/schema` resource.",
+    "Introspect the Reactome graph schema: labels and relationship types with counts, which labels each relationship type connects, property names and types with mandatory flags, indexes and constraints. Read live from Neo4j's built-in schema procedures and cached for the life of the server (the server warms it at startup; a cold first call can take tens of seconds), or taken from a schema file the operator saved from this same database -- never one saved from another. Call this before writing Cypher. Sections the database could not provide are listed as unavailable rather than shown empty. For the full JSON, read the `reactome://graph/schema` resource.",
     {},
     async () => {
       logger.info("cypher_schema");

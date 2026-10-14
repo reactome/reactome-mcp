@@ -22,6 +22,15 @@
  *
  * Read from the environment on every call rather than captured at import, so
  * there is one copy of the answer and it cannot go stale.
+ *
+ * One process sets both for itself: `reactome-mcp extract-schema`
+ * (`src/cli/extract-schema.ts`), an operator command that saves a database's
+ * schema to a file. It is not an instance -- it runs once, by hand, against a
+ * database named on its command line, and imports no server, tool, resource
+ * or transport (asserted in the gate test) -- so the switch that means
+ * "publish query access" does not apply to it. It still connects through the
+ * gated driver, so it reads in the same READ sessions under the same
+ * timeouts.
  */
 export function isGraphAccessEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(env.NEO4J_URI?.trim()) && env.MCP_ALLOW_CYPHER === "1";
