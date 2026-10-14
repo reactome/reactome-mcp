@@ -222,7 +222,84 @@ describe("assertReadOnlyQuery: refuses writes and admin as keywords", () => {
     refused("MATCH (n) CALL (n) { RETURN n.dbId AS id } RETURN id");
   });
 
-  it("fulltext procedures, which are not on the allowlist", () => {
-    refused("CALL db.index.fulltext.queryNodes('x', 'y')");
+  it("fulltext procedures that create or drop, though querying is allowed", () => {
+    refused("CALL db.index.fulltext.createNodeIndex('x', ['X'], ['y'])");
+    refused("CALL db.index.fulltext.drop('x')");
+    accepted("CALL db.index.fulltext.queryNodes('x', 'y') YIELD node RETURN node LIMIT 5");
+    accepted(
+      "CALL db.index.fulltext.queryRelationships('x', 'y') YIELD relationship RETURN relationship"
+    );
+  });
+});
+
+describe("assertReadOnlyQuery: number literals", () => {
+  it("are read whole, and refused when a name runs straight on from one", () => {
+    // Reading only the leading digits of 1e0CALL left `e0CALL` as one name,
+    // so the CALL was never seen. Neo4j reads 1e0 and then CALL.
+    for (const q of [
+      "MATCH (n) WHERE n.x = 1e0CALL dbms.listQueries() YIELD queryId RETURN queryId",
+      "MATCH (n) WITH n LIMIT 1E0LOAD CSV FROM 'http://x/' AS r RETURN r",
+      "WITH 1 AS a LIMIT 0x1LOAD CSV FROM 'http://x/' AS r RETURN r",
+      "MATCH (n) WHERE n.x = 1.5e3DELETE n",
+      "RETURN 1e0CALL{ MATCH (n) RETURN n }",
+      "MATCH (n) WHERE n.x = .5e1DETACH n",
+      "MATCH (n) WHERE n.x = 0o7LOAD CSV FROM 'x' AS r RETURN r",
+      "MATCH (n) WHERE n.x = 1_000 RETURN n",
+      "MATCH (n) WHERE n.x = 1e+5CALL dbms.listConfig() RETURN n",
+    ]) {
+      refused(q);
+    }
+  });
+
+  it("in their ordinary forms", () => {
+    for (const q of [
+      "MATCH (n) WHERE n.x = 1.5e3 RETURN n LIMIT 10",
+      "MATCH (n) WHERE n.x > .5 AND n.y < 1E-3 RETURN n",
+      "MATCH (n) WHERE n.x = 0x1F OR n.x = 0o17 OR n.x = 017 RETURN n",
+      "MATCH p = (a)-[*1..3]->(b) RETURN p LIMIT 5",
+      "RETURN [1,2,3][0..2] AS xs",
+      "RETURN 1+2-3*4/5%6^7 AS x",
+    ]) {
+      accepted(q);
+    }
+  });
+});
+
+describe("assertReadOnlyQuery: plugin namespaces", () => {
+  it("refuses apoc and gds however the name is quoted", () => {
+    for (const q of [
+      "RETURN `apoc.text.join`(['a'], ',')",
+      "CALL `apoc.util.sleep`(1000)",
+      "RETURN `APOC`.text.join(['a'], ',')",
+      "CALL gds.graph.project('g', '*', '*')",
+      "RETURN gds.util.asNode(1)",
+      "CALL `gds.graph.drop`('g')",
+      "RETURN `gds`.version()",
+    ]) {
+      refused(q);
+    }
+  });
+});
+
+describe("assertReadOnlyQuery: names that are keywords elsewhere", () => {
+  it("accepts start and stop as variables; refuses only START/STOP DATABASE", () => {
+    accepted("MATCH p=(start:Pathway)-[:hasEvent]->(e) RETURN start.displayName LIMIT 5");
+    accepted("MATCH (a:Pathway) WITH a AS start RETURN start.stId LIMIT 5");
+    accepted("MATCH (stop:Pathway) RETURN stop LIMIT 1");
+    refused("START DATABASE neo4j");
+    refused("STOP DATABASE neo4j");
+    refused("start   database neo4j");
+  });
+
+  it("accepts use as a variable; refuses USE where a query or a UNION part starts", () => {
+    accepted("MATCH (use:Pathway) RETURN use.stId LIMIT 1");
+    accepted("WITH 1 AS use RETURN use");
+    refused("USE system SHOW USERS");
+    refused("EXPLAIN USE neo4j MATCH (n) RETURN n");
+    refused("PROFILE USE neo4j MATCH (n) RETURN n");
+    refused("MATCH (n) RETURN n.x AS x UNION USE other MATCH (n) RETURN n.x AS x");
+    refused("MATCH (n) RETURN n.x AS x UNION ALL USE other MATCH (n) RETURN n.x AS x");
+    refused("RETURN 1 AS x; USE system SHOW USERS");
+    refused("MATCH (n) WHERE EXISTS { USE other MATCH (m) RETURN m } RETURN n");
   });
 });

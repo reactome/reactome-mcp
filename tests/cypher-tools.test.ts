@@ -50,7 +50,7 @@ describe("reactome_cypher_* tools", () => {
 
   it("says in its description what the guard refuses", () => {
     const description = fakeServer.tools.get("reactome_cypher_query")?.description ?? "";
-    expect(description).toMatch(/fulltext/i);
+    expect(description).toContain("db.index.fulltext.queryRelationships");
     expect(description).toContain("CALL subqueries");
     expect(description).toContain("LOAD CSV");
   });

@@ -18,10 +18,13 @@
 //   - CALL only for the built-in schema procedures below, compared by name
 //     after backticks are removed; no CALL subqueries.
 //   - SHOW only for indexes and constraints.
-//   - No identifier `apoc` followed by `.` -- no APOC procedure or function.
-//   - No LOAD CSV, USE, TERMINATE, PERIODIC COMMIT, and no write or
-//     administration keyword (CREATE, MERGE, SET, DELETE, REMOVE, DETACH,
-//     DROP, GRANT, DENY, REVOKE, ALTER, START, STOP, RENAME).
+//   - No name in the apoc or gds namespaces, however it is quoted.
+//   - No LOAD CSV, TERMINATE, PERIODIC COMMIT, START/STOP DATABASE, no USE
+//     where a query part begins, and no write or administration keyword
+//     (CREATE, MERGE, SET, DELETE, REMOVE, DETACH, DROP, GRANT, DENY, REVOKE,
+//     ALTER, RENAME). SET and SHOW are refused even as variable names: they
+//     can begin a clause in too many places to tell apart safely.
+//   - A number literal with a name running straight on from it is refused.
 //   - Text the scanner cannot finish reading -- an unterminated string,
 //     comment or quoted name -- is refused.
 //
@@ -40,11 +43,21 @@ const ALLOWED_PROCEDURES = new Set([
   "db.indexes",
   "db.constraints",
   "dbms.components",
+  // READ-mode procedures in Neo4j 4.3/4.4: they query an existing fulltext
+  // index. Creating and dropping one are separate procedures, not listed.
+  "db.index.fulltext.querynodes",
+  "db.index.fulltext.queryrelationships",
 ]);
+
+/**
+ * Plugin namespaces. Any name in them is refused, called or not: their
+ * procedures and functions are not part of what a read needs, and several
+ * write, load from outside the graph, or run other queries.
+ */
+const PLUGIN_NAMESPACES = ["apoc", "gds"];
 
 /** Keywords refused wherever they appear as a keyword. */
 const FORBIDDEN_KEYWORDS = new Set([
-  "use",
   "terminate",
   "periodic",
   "create",
@@ -58,8 +71,6 @@ const FORBIDDEN_KEYWORDS = new Set([
   "deny",
   "revoke",
   "alter",
-  "start",
-  "stop",
   "rename",
 ]);
 
@@ -104,6 +115,7 @@ type Token =
   | { kind: "number" }
   | { kind: "punct"; text: string };
 
+const DIGIT = /[0-9]/;
 const IDENTIFIER_START = /[\p{ID_Start}_]/u;
 const IDENTIFIER_PART = /[\p{ID_Continue}_]/u;
 
@@ -190,10 +202,35 @@ export function tokenize(query: string): Token[] {
       continue;
     }
 
-    // A number is its leading digits. Whatever follows is read as a new
-    // token, so `1CALL` is a number and then CALL.
-    if (/[0-9]/.test(c)) {
-      while (i < chars.length && /[0-9]/.test(chars[i] as string)) i++;
+    // A number literal, read the way Cypher defines one: decimal with an
+    // optional fraction and exponent (`1`, `1.5`, `.5`, `1e3`, `1.5E-3`),
+    // hexadecimal `0x1F`, octal `0o17` (or `017`, which the decimal rule
+    // covers). A name running straight on from one -- `1e0CALL`, `0x1LOAD`,
+    // `1_000` -- is refused rather than guessed at: where the lexer splits
+    // that is exactly what decides whether a keyword is seen.
+    if (DIGIT.test(c) || (c === "." && DIGIT.test(next ?? ""))) {
+      const at = (k: number) => chars[k] ?? "";
+      if (c === "0" && /[xX]/.test(at(i + 1))) {
+        i += 2;
+        while (/[0-9a-fA-F]/.test(at(i))) i++;
+      } else if (c === "0" && /[oO]/.test(at(i + 1))) {
+        i += 2;
+        while (/[0-7]/.test(at(i))) i++;
+      } else {
+        while (DIGIT.test(at(i))) i++;
+        if (at(i) === "." && DIGIT.test(at(i + 1))) {
+          i++;
+          while (DIGIT.test(at(i))) i++;
+        }
+        const signed = /[+-]/.test(at(i + 1));
+        if (/[eE]/.test(at(i)) && DIGIT.test(at(i + (signed ? 2 : 1)))) {
+          i += signed ? 2 : 1;
+          while (DIGIT.test(at(i))) i++;
+        }
+      }
+      if (IDENTIFIER_PART.test(at(i)) || at(i) === "`") {
+        throw new QueryRejected("a name runs straight on from a number literal");
+      }
       tokens.push({ kind: "number" });
       continue;
     }
@@ -233,20 +270,47 @@ function isKeyword(tokens: Token[], i: number): boolean {
   return true;
 }
 
+/**
+ * Whether token `i` is where a query part begins: the start of the text, or
+ * after EXPLAIN / PROFILE, UNION [ALL], `;` or `{`.
+ */
+function beginsQueryPart(tokens: Token[], i: number): boolean {
+  const before = tokens[i - 1];
+  if (before === undefined) return true;
+  if (isPunct(before, ";") || isPunct(before, "{")) return true;
+  const word = before.kind === "word" ? before.text.toLowerCase() : undefined;
+  if (word === "explain" || word === "profile" || word === "union") return true;
+  return word === "all" && lower(tokens[i - 2]) === "union";
+}
+
 function check(tokens: Token[]): string | undefined {
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     const word = lower(token);
     if (word === undefined) continue;
 
-    // Any APOC name, procedure or function, whatever it is called from.
-    if (word === "apoc" && isPunct(tokens[i + 1], ".")) {
-      return "APOC procedures and functions are not allowed";
+    // Any plugin name, procedure or function, however it is quoted:
+    // apoc.x(...), `apoc`.x(...) and `apoc.x`(...) are the same call.
+    for (const ns of PLUGIN_NAMESPACES) {
+      if (
+        (word === ns && isPunct(tokens[i + 1], ".")) ||
+        (token?.kind === "quoted" && word.startsWith(`${ns}.`))
+      ) {
+        return `${ns.toUpperCase()} procedures and functions are not allowed`;
+      }
     }
 
     if (!isKeyword(tokens, i)) continue;
 
     if (word === "load" && lower(tokens[i + 1]) === "csv") return "LOAD CSV is not allowed";
+    // Administration only when followed by DATABASE; otherwise start and
+    // stop are ordinary names, common in path queries.
+    if ((word === "start" || word === "stop") && lower(tokens[i + 1]) === "database") {
+      return `${word.toUpperCase()} DATABASE is not allowed`;
+    }
+    // USE is a clause only where a query, a UNION part or a subquery begins;
+    // anywhere else `use` is a name.
+    if (word === "use" && beginsQueryPart(tokens, i)) return "USE is not allowed";
     if (FORBIDDEN_KEYWORDS.has(word)) return `${word.toUpperCase()} is not allowed`;
 
     if (word === "show") {

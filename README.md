@@ -119,9 +119,11 @@ database refuses `CREATE`, `MERGE`, `DELETE`, `SET` and `REMOVE`. Before a
 query reaches the database it is checked against an allowlist: `CALL` only for
 the built-in schema procedures (`db.labels`, `db.relationshipTypes`,
 `db.propertyKeys`, `db.schema.*`, `db.indexes`, `db.constraints`,
-`dbms.components`) -- not fulltext procedures, and no `CALL { ... }` subqueries
--- `SHOW` only for indexes and constraints, and no APOC, `LOAD CSV`, `USE`,
-`TERMINATE` or write/admin clause. The check runs on the query as Neo4j tokenises
+`dbms.components`) and the fulltext query procedures
+(`db.index.fulltext.queryNodes`, `db.index.fulltext.queryRelationships`), no
+`CALL { ... }` subqueries, `SHOW` only for indexes and constraints, and no
+APOC or GDS name, `LOAD CSV`, `USE`, `TERMINATE` or write/admin clause. `SET`
+and `SHOW` cannot be used as variable names. The check runs on the query as Neo4j tokenises
 it (comments, string literals and quoted names read as such), and anything it
 cannot finish reading is refused. Each query runs under a server-side timeout;
 rows are streamed and reading stops at `max_rows`, with the rest discarded on

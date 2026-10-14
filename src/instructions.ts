@@ -96,7 +96,7 @@ This instance can query the Reactome graph database directly. Use it for what th
 2. Use \`reactome_cypher_sample\` on a label to see a representative node.
 3. Run the query with \`reactome_cypher_query\`:
    - It runs in a READ-mode session; write clauses are refused by the database.
-   - \`CALL\` is allowed only for the built-in schema procedures (\`db.labels\`, \`db.schema.*\`, \`db.indexes\`, \`db.constraints\`, \`dbms.components\`, ...), and \`SHOW\` only for indexes and constraints. Fulltext procedures, \`CALL { ... }\` subqueries, APOC, \`LOAD CSV\` and \`USE\` are refused.
+   - \`CALL\` is allowed only for the built-in schema procedures (\`db.labels\`, \`db.schema.*\`, \`db.indexes\`, \`db.constraints\`, \`dbms.components\`, ...) and fulltext queries (\`db.index.fulltext.queryNodes\`, \`db.index.fulltext.queryRelationships\`), and \`SHOW\` only for indexes and constraints. Other procedures, \`CALL { ... }\` subqueries, APOC/GDS, \`LOAD CSV\` and \`USE\` are refused.
    - A server-side timeout ends long queries. Always include a \`LIMIT\`, and anchor on an indexed property (for example \`stId\` or \`dbId\`) rather than scanning a whole label.
    - Return specific properties (\`RETURN p.stId, p.displayName\`) rather than whole nodes; reading stops at \`max_rows\`, and response size is capped.
 
