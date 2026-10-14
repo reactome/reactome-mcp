@@ -6,6 +6,16 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Graph database access, restored and off by default.** The three `reactome_cypher_*` tools and the `reactome://graph/schema` resource are back for **internal** instances pointed at a dedicated Reactome graph database container. They exist only when **both** `NEO4J_URI` is set and `MCP_ALLOW_CYPHER=1`; a publicly reachable instance must set neither.
+
+  One predicate, `isGraphAccessEnabled()`, is asked by every surface — tool registration (a new `cypher` tool group), the resource, the server instructions, the startup schema warm-up — and by `getDriver()` itself, which is the only code that imports `neo4j-driver`. With the gate closed no driver is ever constructed, in the stdio entrypoint, the HTTP entrypoint, `startHttpServer` or `createServer`. `MCP_TOOL_GROUPS` naming `cypher` with the gate closed refuses to start. `/health` reports `graphAccess`.
+
+  Schema extraction now uses Neo4j's built-in procedures only (`db.schema.*`, `SHOW INDEXES`/`SHOW CONSTRAINTS` with `db.indexes()`/`db.constraints()` as fallback), because the Reactome graph database image runs Neo4j 4.4 Community without APOC. Each section degrades on its own and is reported as unavailable rather than rendered empty.
+
+  The query guard is now an **allowlist**: `CALL` only for the built-in schema procedures, `SHOW` only for indexes and constraints, and no APOC name, `LOAD CSV`, `USE` or `TERMINATE`. The old denylist let through `apoc.cypher.runMany`/`runFile`/`runSchema`/`parallel`, `apoc.schema.assert`, `apoc.util.sleep`, `apoc.custom.*`, `apoc.systemdb.*`, `apoc.lock.*`, `dbms.killQuery`/`listQueries`/`listConfig` and `USE`, and a comment splitting a keyword (`LOAD/**/CSV`). The check runs on one left-to-right tokenisation (strings, backtick names, line and block comments, Unicode separators), so a comment opener inside a comment or a string can no longer hide text, `CALL \`db\`.\`labels\`()` is allowed, and CALL subqueries and write/admin keywords are refused. Number literals are read whole (`1e0CALL` no longer hides a CALL) and a name running on from one is refused; `gds` is refused like `apoc`; `start`/`stop`/`use` work as variable names; the fulltext query procedures are allowed. The `CYPHER` options prefix is refused, since the pre-parser strips it and a `USE` after it would begin the query. Query rows are streamed and reading stops at `max_rows`, rather than the whole result being read into memory and capped afterwards. A schema section that failed is retried after five minutes instead of staying unavailable for the life of the process. `neo4j-driver` is loaded only once the gate is open.
+
+  `NEO4J_DATABASE` now defaults to the server's default database, and `NEO4J_PASSWORD` to none (connect without credentials), rather than `graph.db` and `neo4j`.
+
 - **`MCP_TOOL_GROUPS` — choose which tools an instance publishes.** All 59 register by default, so a local stdio user is unaffected; a hosted instance names the groups it means to serve (`search`, `pathway`, `entity`, `analysis`, `export`, `interactors`, `gsa`, `utilities`).
 
   It is a **registration** switch, not a documentation one. An omitted group's tools are not registered, do not appear in `tools/list`, are not mentioned in the instructions the server sends on connection, and neither are its **resources** — omitting `analysis` withholds `reactome://analysis/{token}` as well, since a capability moved to a URI is not a capability withheld. A tool described nowhere but still answering is the divergence that let this server advertise Cypher tools it had not registered.
@@ -16,15 +26,7 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Removed
 
-- **BREAKING: all graph database access.** The three `reactome_cypher_*` tools, the `reactome://graph/schema` resource, the Cypher section of the server instructions, the startup schema prefetch and the `neo4j-driver` dependency are gone. `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `CYPHER_QUERY_TIMEOUT_MS` and `MCP_ALLOW_CYPHER` are inert — nothing reads them.
-
-  **Who this affects:** a curator running this server locally over stdio against `reactome_neo4j_env`, which is who the tools were built for. There is no replacement in this server; query the graph directly, as the Reactome chatbot does with its own driver when it builds embeddings.
-
-  **Why now.** This server is being hosted publicly, behind the website's nginx. Constitution Principle IV already said no deployment holds a Neo4j connection, and enforced it with a gate — which made the property true of a *configuration* rather than of the code. The gate was consulted in four places and one of them, `src/http-server.ts`, the entrypoint that actually runs in the hosted deployment, still opened a connection on `NEO4J_URI` alone after the other three were corrected. Neither consumer of this server needed graph access in the first place.
-
-  The public tool surface is **unchanged at 59** — the Cypher tools were only ever the 60th to 62nd, and only with both switches on.
-
-  `tests/no-graph-access.test.ts` asserts the absence with the old switches turned **on**, so it cannot pass by being configured off.
+- ~~**BREAKING: all graph database access.**~~ Reverted before release — see *Graph database access, restored and off by default* above. The tools came back behind a gate that `getDriver()` enforces itself, rather than one each call site had to remember.
 
 ### Fixed
 - **Ten tools read field paths the Reactome services never return.** Each called the right endpoint and reported success, so nothing flagged them: `contentClient.get<T>` asserts `T`, it does not verify it, and 51 of 56 tools had no test. `search_suggest` and `search_spellcheck` expected `{suggestions: []}` where the API returns a bare array; `entity_component_of` expected `Complex` objects where the API returns one entry per relationship type with parallel `names`/`stIds`/`schemaClasses` arrays; `participants` expected `stId` where the API returns `peDbId`; the four interactor tools read `score` one level above where it lives, throwing on `.toFixed`; `analysis_found_entities` read `mapsTo[].identifier` where the API returns `ids[]`. **`search_diagram` had never returned an answer** — it shared the grouped-results helper, but that endpoint returns a flat `entries` array, so every call threw `result.results is not iterable`.

@@ -12,6 +12,7 @@
 import { startHttpServer } from "./http.js";
 import { logger } from "./logger.js";
 import { MCP_HTTP_PORT, MCP_HTTP_HOST } from "./config.js";
+import { warmGraphSchema } from "./graph/warmup.js";
 
 const port = MCP_HTTP_PORT;
 
@@ -26,8 +27,12 @@ if (!port) {
 // validates the tool-group configuration synchronously, so a bad value threw
 // past the .catch below and killed the process with a raw stack trace. Dying
 // was correct; dying without the log line that says why was not.
+//
+// The graph schema warm-up decides for itself whether graph access is on;
+// this entrypoint does not.
 Promise.resolve()
   .then(() => startHttpServer(port, MCP_HTTP_HOST))
+  .then(() => warmGraphSchema())
   .catch((error: unknown) => {
     logger.error("fatal error starting http server", {
       error: error instanceof Error ? error.message : String(error),

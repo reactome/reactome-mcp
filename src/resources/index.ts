@@ -1,7 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerStaticResources } from "./static.js";
 import { registerResourceTemplates } from "./templates.js";
-import { resolveToolGroups, type ToolGroup } from "../tools/index.js";
+import { registerGraphResources } from "./graph.js";
+import { permittedGroups, resolveToolGroups, type ToolGroup } from "../tools/index.js";
 
 /**
  * Which group each resource belongs to.
@@ -27,6 +28,7 @@ const RESOURCE_GROUPS: Record<string, ToolGroup> = {
   "reactome://analysis/{token}": "analysis",
   "reactome://top-pathways/{species}": "pathway",
   "reactome://events-hierarchy/{species}": "pathway",
+  "reactome://graph/schema": "cypher",
 };
 
 export const RESOURCE_URIS = Object.keys(RESOURCE_GROUPS);
@@ -41,6 +43,8 @@ function uriOf(args: unknown[]): string | undefined {
 }
 
 export function registerAllResources(server: McpServer, groups: ToolGroup[] = resolveToolGroups()) {
+  // The graph schema needs the graph access gate as well as its group.
+  const allowed = permittedGroups(groups);
   const original = server.resource.bind(server);
   (server as unknown as { resource: (...a: unknown[]) => unknown }).resource = (
     ...args: unknown[]
@@ -53,10 +57,11 @@ export function registerAllResources(server: McpServer, groups: ToolGroup[] = re
           `Add it to RESOURCE_GROUPS in src/resources/index.ts so MCP_TOOL_GROUPS can govern it.`
       );
     }
-    if (!groups.includes(group)) return undefined;
+    if (!allowed.includes(group)) return undefined;
     return (original as (...a: unknown[]) => unknown)(...args);
   };
 
   registerStaticResources(server);
   registerResourceTemplates(server);
+  registerGraphResources(server);
 }

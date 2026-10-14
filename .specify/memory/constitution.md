@@ -1,18 +1,22 @@
 <!--
 Sync Impact Report
 ==================
-Version: none -> 1.0.0  (initial ratification)
+Version: 1.0.0 -> 2.0.0  (2026-10-14)
 
-Added:    Principles I-VII, Scope boundaries, Development workflow, Governance
-Modified: none
+Modified: Principle IV redefined -- "no Neo4j connection in any deployment"
+          becomes "no graph access on a public instance; internal instances
+          may opt in behind one gate that the driver itself enforces".
+          Scope boundaries updated to match.
+Added:    none
 Removed:  none
 
-Rationale: first constitution for this repository. The principles are not
-aspirational -- each one is written from a failure this repo actually had, or a
-boundary the Reactome team has already decided. Sources are named inline so a
-future reader can check whether the reason still holds.
+Rationale: Adam asked for the Cypher tools back for internal instances pointed
+at a dedicated graph database container, switched off by default so a public
+instance can never run Cypher. MAJOR because a principle was redefined, not
+reworded. The reason for the 2026-09-21 removal (a gate asked in four places,
+one of them wrong) is kept below, with what is different this time.
 
-Follow-up TODOs: none.
+Previous: 1.0.0 (initial ratification, 2026-09-14).
 -->
 
 # Reactome MCP Server Constitution
@@ -62,24 +66,36 @@ shipped.
 
 ### IV. Reactome data, through the public services
 
-Tools read the Content Service and the Analysis Service over HTTP. The server
-holds no Neo4j connection, because there is no code that can open one: the Cypher
-tools, the graph schema resource and the `neo4j-driver` dependency were removed on
-2026-09-21.
+Tools read the Content Service and the Analysis Service over HTTP. **A publicly
+reachable instance holds no Neo4j connection.** An internal instance may be
+given read-only Cypher access to a dedicated Reactome graph database, and only
+when both `NEO4J_URI` and `MCP_ALLOW_CYPHER=1` are set.
 
 This is a decision about blast radius, not capability. A public MCP endpoint with
-database credentials is a different security proposition from one that can only
-make the same calls a browser can.
+database access is a different security proposition from one that can only
+make the same calls a browser can: an arbitrary query from the internet can
+take the database, and what depends on it, down.
 
-**Why removed rather than gated.** This principle was enforced by a gate, which
-made it a property of a configuration rather than of the code. The gate was
-consulted in four places and one of them — `src/http-server.ts`, the entrypoint
-that actually runs in the hosted deployment — still opened a connection on
-`NEO4J_URI` alone after the other three were corrected. Neither of the two
-consumers needed graph access in any case: the chatbot queries the graph directly
-with its own driver when it builds embeddings, and the website needs the
-REST-backed tools only. `tests/no-graph-access.test.ts` asserts the absence with
-the old switches turned ON, so it cannot pass by being configured off.
+**History.** Until 2026-09-21 this was enforced by a gate that each surface
+consulted for itself. It was consulted in four places and one of them --
+`src/http-server.ts`, the entrypoint that actually runs in the hosted
+deployment -- still opened a connection on `NEO4J_URI` alone after the other
+three were corrected. So the capability was removed outright. On 2026-10-14 it
+was restored for internal use, on a different footing:
+
+- **One predicate**, `isGraphAccessEnabled()` in `src/graph/gate.ts`, read from
+  the environment at call time so there is no second copy of the answer.
+- **The driver enforces it.** `getDriver()` asks the predicate itself, and
+  `src/clients/neo4j.ts` is the only file allowed to import `neo4j-driver`. A
+  surface that forgets to ask still cannot connect.
+- **Every door is tested, both ways.** `tests/graph-access-gate.test.ts` drives
+  the stdio entrypoint, the HTTP entrypoint, `startHttpServer`, `createServer`
+  and the registrars in every combination of the two variables and counts
+  driver constructions. A new entrypoint belongs in that matrix.
+
+What would reverse this: graph access being needed on a public instance, or the
+gate failing open anywhere. Either means removing the capability again, not
+adding another check.
 
 ### V. Analysis runs in the service, not in the agent
 
@@ -114,7 +130,7 @@ for model consumption, transports (stdio today; Streamable HTTP is the open
 question for hosted use), and the tests and sweeps that keep the above honest.
 
 **Out of scope by decision, not by oversight.** Direct Neo4j access from any
-deployed instance (Principle IV). Reimplementing analysis (Principle V).
+publicly reachable instance (Principle IV). Reimplementing analysis (Principle V).
 Non-Reactome data sources — the chatbot's cascade reaches Tavily and external
 search, and that logic belongs in the chatbot, not here.
 
@@ -152,4 +168,4 @@ Amendments bump the version: MAJOR for a principle removed or redefined, MINOR
 for one added, PATCH for wording. Specs live in `specs/`; the ones that record
 why something is the way it is are as valuable as the ones that plan what is next.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-14 | **Last amended**: 2026-09-14
+**Version**: 2.0.0 | **Ratified**: 2026-09-14 | **Last amended**: 2026-10-14
