@@ -19,101 +19,15 @@ vi.mock("neo4j-driver", async () => {
 });
 
 import { queriesRun } from "./helpers/fake-neo4j.js";
+import { community44, NO_PROCEDURE } from "./helpers/community44.js";
 import {
   fetchGraphSchema,
   _resetGraphSchemaCache,
   SCHEMA_RETRY_AFTER_MS,
 } from "../src/graph/schema.js";
+import { SCHEMA_FORMAT } from "../src/graph/schema-source.js";
 import { formatGraphSchemaMarkdown } from "../src/graph/format-schema.js";
 import { closeDriver } from "../src/clients/neo4j.js";
-
-const NO_PROCEDURE = (name: string) =>
-  new Error(
-    `There is no procedure with the name \`${name}\` registered for this database instance.`
-  );
-
-/**
- * Answers the way Neo4j 4.4 Community without APOC does. `overrides` replaces
- * the answer for any query containing its key.
- */
-function community44(
-  overrides: Record<string, (params: Record<string, unknown>) => unknown[]> = {}
-) {
-  return (query: string, params: Record<string, unknown>): unknown[] => {
-    for (const [needle, answer] of Object.entries(overrides)) {
-      if (query.includes(needle)) return answer(params);
-    }
-    const apoc = /\b(apoc\.[\w.]+)/.exec(query);
-    if (apoc?.[1]) throw NO_PROCEDURE(apoc[1]);
-
-    if (query.includes("dbms.components"))
-      return [{ name: "Neo4j Kernel", versions: ["4.4.40"], edition: "community" }];
-    if (query.includes("db.labels")) return [{ label: "Pathway" }, { label: "Reaction" }];
-    if (query.includes("db.relationshipTypes"))
-      return [{ relationshipType: "hasEvent" }, { relationshipType: "input" }];
-    if (query.includes("db.schema.nodeTypeProperties"))
-      return [
-        {
-          nodeType: ":`Pathway`",
-          nodeLabels: ["Pathway"],
-          propertyName: "stId",
-          propertyTypes: ["String"],
-          mandatory: true,
-        },
-      ];
-    if (query.includes("db.schema.relTypeProperties"))
-      return [
-        {
-          relType: ":`input`",
-          propertyName: "stoichiometry",
-          propertyTypes: ["Long"],
-          mandatory: true,
-        },
-      ];
-    if (query.includes("db.schema.visualization"))
-      return [
-        {
-          nodes: [
-            { identity: -1, labels: ["Pathway"], properties: { name: "Pathway" } },
-            { identity: -2, labels: ["Reaction"], properties: { name: "Reaction" } },
-          ],
-          relationships: [{ identity: -3, start: -1, end: -2, type: "hasEvent", properties: {} }],
-        },
-      ];
-    if (query.includes("SHOW INDEXES"))
-      return [
-        {
-          name: "index_pathway_stId",
-          type: "BTREE",
-          entityType: "NODE",
-          labelsOrTypes: ["Pathway"],
-          properties: ["stId"],
-          state: "ONLINE",
-        },
-      ];
-    if (query.includes("SHOW CONSTRAINTS"))
-      return [
-        {
-          name: "constraint_dbId",
-          type: "UNIQUENESS",
-          entityType: "NODE",
-          labelsOrTypes: ["DatabaseObject"],
-          properties: ["dbId"],
-        },
-      ];
-    // Per-token counts: one UNION ALL query each for labels and for
-    // relationship types, keyed by parameter so the names need no escaping.
-    if (query.includes("UNION ALL") || /RETURN \$\w+ AS key/.test(query)) {
-      return Object.entries(params).map(([, key]) => ({
-        key,
-        count: key === "Pathway" ? 2_000 : key === "hasEvent" ? 9_000 : 500,
-      }));
-    }
-    if (/MATCH \(n\) RETURN count\(n\)/.test(query)) return [{ count: 3_000_000 }];
-    if (/MATCH \(\)-\[r\]->\(\) RETURN count\(r\)/.test(query)) return [{ count: 12_000_000 }];
-    throw new Error(`unscripted query: ${query}`);
-  };
-}
 
 describe("fetchGraphSchema on Neo4j 4.4 Community without APOC", () => {
   beforeEach(() => {
@@ -148,6 +62,59 @@ describe("fetchGraphSchema on Neo4j 4.4 Community without APOC", () => {
     expect(schema.relTypeProperties[0]?.relType).toBe("input");
     expect(schema.indexes[0]?.name).toBe("index_pathway_stId");
     expect(schema.constraints[0]?.name).toBe("constraint_dbId");
+  });
+
+  it("records which database it describes, and the format it is written in", async () => {
+    // A schema saved to a file is only usable against the database it came
+    // from; the fingerprint is how a reader tells.
+    const schema = await fetchGraphSchema();
+    expect(schema.schemaFormat).toBe(SCHEMA_FORMAT);
+    const digest = expect.stringMatching(/^[0-9a-f]{64}$/);
+    expect(schema.source).toEqual({
+      neo4jVersion: "4.4.40",
+      neo4jEdition: "community",
+      database: "neo4j",
+      releaseNumber: 97,
+      nodeCount: 3_000_000,
+      relCount: 12_000_000,
+      labelsDigest: digest,
+      relationshipTypesDigest: digest,
+      propertyKeysDigest: digest,
+      indexesDigest: digest,
+      constraintsDigest: digest,
+      generatedAt: expect.any(String),
+    });
+    expect(Number.isNaN(Date.parse(schema.source?.generatedAt ?? ""))).toBe(false);
+  });
+
+  it("is format 2: format 1 files carried no metadata digests", () => {
+    expect(SCHEMA_FORMAT).toBe(2);
+  });
+
+  it("digests each metadata list in a canonical order, so the order the database answers in does not matter", async () => {
+    const first = (await fetchGraphSchema()).source;
+    _resetGraphSchemaCache();
+    fake.respond = community44({
+      "db.labels": () => [{ label: "Reaction" }, { label: "Pathway" }],
+      "db.propertyKeys": () => [
+        { propertyKey: "stoichiometry" },
+        { propertyKey: "dbId" },
+        { propertyKey: "stId" },
+      ],
+    });
+    const second = (await fetchGraphSchema()).source;
+    expect(second?.labelsDigest).toBe(first?.labelsDigest);
+    expect(second?.propertyKeysDigest).toBe(first?.propertyKeysDigest);
+  });
+
+  it("leaves the release out, rather than guessing, where there is no DBInfo node", async () => {
+    // A curator database or a non-Reactome graph has none. That is not a
+    // failure: the rest of the fingerprint still identifies the database.
+    fake.respond = community44({ DBInfo: () => [] });
+    const schema = await fetchGraphSchema();
+    expect(schema.unavailable).toEqual([]);
+    expect(schema.source).not.toHaveProperty("releaseNumber");
+    expect(schema.source?.nodeCount).toBe(3_000_000);
   });
 
   it("reads only, and under a timeout", async () => {
@@ -203,8 +170,10 @@ describe("fetchGraphSchema on Neo4j 4.4 Community without APOC", () => {
     const schema = await fetchGraphSchema();
     expect(schema.nodeTypeProperties).toEqual([]);
     expect(schema.indexes).toEqual([]);
+    // The fingerprint digests the index list, so without one there is no
+    // fingerprint either -- and no saved schema could be verified against it.
     expect(schema.unavailable.map(u => u.section).sort()).toEqual(
-      ["indexes", "nodeTypeProperties"].sort()
+      ["indexes", "nodeTypeProperties", "source"].sort()
     );
     // The rest is intact.
     expect(schema.stats.labels.Pathway).toBe(2_000);
@@ -294,13 +263,30 @@ describe("fetchGraphSchema on Neo4j 4.4 Community without APOC", () => {
     ]);
     expect(a).toBe(b);
     expect(b).toBe(c);
-    expect(queriesRun(fake).filter(q => q.includes("dbms.components"))).toHaveLength(1);
+    // A query one fetch runs exactly once. (dbms.components runs twice per
+    // fetch: once for the source fingerprint, once for dbComponents.)
+    expect(queriesRun(fake).filter(q => q.includes("db.schema.visualization"))).toHaveLength(1);
   });
 });
 
 function minimalSchema(): GraphSchema {
   return {
+    schemaFormat: SCHEMA_FORMAT,
     fetchedAt: "2026-10-14T15:00:00Z",
+    source: {
+      neo4jVersion: "4.4.40",
+      neo4jEdition: "community",
+      database: "neo4j",
+      releaseNumber: 97,
+      nodeCount: 100,
+      relCount: 200,
+      labelsDigest: "0".repeat(64),
+      relationshipTypesDigest: "0".repeat(64),
+      propertyKeysDigest: "0".repeat(64),
+      indexesDigest: "0".repeat(64),
+      constraintsDigest: "0".repeat(64),
+      generatedAt: "2026-10-14T15:00:00Z",
+    },
     dbComponents: [{ name: "Neo4j Kernel", versions: ["4.4.40"], edition: "community" }],
     stats: {
       nodeCount: 100,
@@ -348,6 +334,7 @@ describe("formatGraphSchemaMarkdown", () => {
   it("covers totals, labels, rel types, patterns, properties, indexes, constraints", () => {
     const md = formatGraphSchemaMarkdown(minimalSchema());
     expect(md).toContain("Neo4j:** 4.4.40");
+    expect(md).toContain("**Reactome release:** 97");
     expect(md).toContain("100 nodes");
     expect(md).toContain("`Pathway` 50");
     expect(md).toContain("`hasEvent` 80");
@@ -360,6 +347,12 @@ describe("formatGraphSchemaMarkdown", () => {
     expect(md).not.toContain("Unavailable");
     // Nothing in the digest should send a reader looking for APOC.
     expect(md.toLowerCase()).not.toContain("apoc");
+  });
+
+  it("names no release for a graph that has none", () => {
+    const { releaseNumber: _omitted, ...source } = minimalSchema().source!;
+    const md = formatGraphSchemaMarkdown({ ...minimalSchema(), source });
+    expect(md).not.toContain("Reactome release");
   });
 
   it("stays small enough for an LLM context window", () => {

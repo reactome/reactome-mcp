@@ -1,6 +1,21 @@
 <!--
 Sync Impact Report
 ==================
+Version: 2.0.0 -> 2.0.1  (2026-10-14)
+
+Modified: Principle IV, wording -- records that the `extract-schema` operator
+          command connects without MCP_ALLOW_CYPHER, and why that is not an
+          instance with graph access.
+Added:    none
+Removed:  none
+
+Rationale: PATCH. No principle changed: the gate is about what an instance
+publishes, and the CLI publishes nothing. Written down because the principle
+says a new entrypoint belongs in the gate matrix, and this one deliberately
+sits outside it.
+
+Previous: 2.0.0 (2026-10-14), below.
+
 Version: 1.0.0 -> 2.0.0  (2026-10-14)
 
 Modified: Principle IV redefined -- "no Neo4j connection in any deployment"
@@ -93,6 +108,15 @@ was restored for internal use, on a different footing:
   and the registrars in every combination of the two variables and counts
   driver constructions. A new entrypoint belongs in that matrix.
 
+**Not an instance.** `reactome-mcp extract-schema` (`src/cli/extract-schema.ts`)
+opens the gate for its own process and nothing else: an operator runs it by
+hand against a database named on its command line, it writes that database's
+schema to a file, and it serves nothing -- it imports no server, tool, resource
+or transport, which the gate test asserts. It still connects through
+`getDriver()`, in READ sessions under the schema timeouts. A saved schema
+(`NEO4J_SCHEMA_FILE`) is read only behind the gate, and served only against
+the database whose fingerprint it carries.
+
 What would reverse this: graph access being needed on a public instance, or the
 gate failing open anywhere. Either means removing the capability again, not
 adding another check.
@@ -168,4 +192,4 @@ Amendments bump the version: MAJOR for a principle removed or redefined, MINOR
 for one added, PATCH for wording. Specs live in `specs/`; the ones that record
 why something is the way it is are as valuable as the ones that plan what is next.
 
-**Version**: 2.0.0 | **Ratified**: 2026-09-14 | **Last amended**: 2026-10-14
+**Version**: 2.0.1 | **Ratified**: 2026-09-14 | **Last amended**: 2026-10-14

@@ -30,7 +30,7 @@ export interface FakeSession {
 export type FakeRows = Iterable<unknown>;
 
 export interface FakeNeo4jState {
-  drivers: Array<{ uri: string; config: Record<string, unknown> }>;
+  drivers: Array<{ uri: string; config: Record<string, unknown>; auth?: unknown }>;
   sessions: FakeSession[];
   /** Rows for a query; throw to simulate a database error. */
   respond: (query: string, params: Record<string, unknown>) => FakeRows | Promise<FakeRows>;
@@ -105,8 +105,8 @@ function fakeResult(state: FakeNeo4jState, run: FakeRun) {
 export function fakeNeo4jModule(state: FakeNeo4jState) {
   state.moduleLoads = (state.moduleLoads ?? 0) + 1;
   const neo4j = {
-    driver(uri: string, _auth: unknown, config: Record<string, unknown> = {}) {
-      state.drivers.push({ uri, config });
+    driver(uri: string, auth: unknown, config: Record<string, unknown> = {}) {
+      state.drivers.push({ uri, config, auth });
       return {
         session(sessionConfig: Record<string, unknown> = {}) {
           const session: FakeSession = { config: sessionConfig, runs: [], closed: false };
@@ -135,7 +135,13 @@ export function fakeNeo4jModule(state: FakeNeo4jState) {
         async close() {},
       };
     },
-    auth: { basic: (user: string, _password: string) => ({ scheme: "basic", principal: user }) },
+    auth: {
+      basic: (user: string, password: string) => ({
+        scheme: "basic",
+        principal: user,
+        credentials: password,
+      }),
+    },
     session: { READ: "READ", WRITE: "WRITE" },
     int: (value: number | string) => ({ __int: Number(value) }),
   };

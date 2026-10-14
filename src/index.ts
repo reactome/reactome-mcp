@@ -22,9 +22,26 @@ async function main() {
   warmGraphSchema();
 }
 
-main().catch(error => {
-  logger.error("fatal error during startup", {
-    error: error instanceof Error ? error.message : String(error),
+if (process.argv[2] === "extract-schema") {
+  // An operator command, not the server: no server is built and no transport
+  // opened. `process.exitCode` rather than `process.exit()`, so the JSON
+  // written to stdout drains before the process ends.
+  import("./cli/extract-schema.js")
+    .then(({ runExtractSchema }) => runExtractSchema(process.argv.slice(3)))
+    .then(code => {
+      process.exitCode = code;
+    })
+    .catch((error: unknown) => {
+      logger.error("extract-schema failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      process.exitCode = 1;
+    });
+} else {
+  main().catch(error => {
+    logger.error("fatal error during startup", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    process.exit(1);
   });
-  process.exit(1);
-});
+}

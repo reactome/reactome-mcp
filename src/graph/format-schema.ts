@@ -54,8 +54,11 @@ export function formatGraphSchemaMarkdown(schema: GraphSchema): string {
   const lines: string[] = [];
   lines.push(`## Reactome Graph Schema`);
   const dbComp = schema.dbComponents[0];
+  const release = schema.source?.releaseNumber;
   lines.push(
-    `**Neo4j:** ${dbComp?.versions?.[0] ?? "?"} ${dbComp?.edition ?? ""} · **Fetched:** ${schema.fetchedAt}`
+    `**Neo4j:** ${dbComp?.versions?.[0] ?? "?"} ${dbComp?.edition ?? ""} · ` +
+      (release === undefined ? "" : `**Reactome release:** ${release} · `) +
+      `**Fetched:** ${schema.fetchedAt}`
   );
   lines.push(
     `**Totals:** ${stats.nodeCount.toLocaleString()} nodes · ${stats.relCount.toLocaleString()} relationships · ${labelEntries.length} labels · ${relEntries.length} relationship types`

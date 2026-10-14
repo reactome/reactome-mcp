@@ -19,6 +19,7 @@ import { logger } from "../logger.js";
 type Neo4jModule = Pick<typeof import("neo4j-driver"), "driver" | "auth" | "session" | "int">;
 
 let driverPromise: Promise<{ neo4j: Neo4jModule; driver: Driver }> | null = null;
+let shutdownHooked = false;
 
 function isLoopback(uri: string): boolean {
   try {
@@ -45,19 +46,25 @@ async function build(): Promise<{ neo4j: Neo4jModule; driver: Driver }> {
   const driver = neo4j.driver(uri, auth, { disableLosslessIntegers: true });
   logger.info("neo4j driver initialized", { database: database ?? "(server default)" });
 
-  // process.once expects a void-returning listener. Handing it an async
-  // function meant a failed close rejected with nobody listening, which Node
-  // turns into a hard exit on unhandled rejection.
-  const onShutdown = () => {
-    void closeDriver().catch((error: unknown) => {
-      logger.warn("neo4j driver close failed during shutdown", {
-        error: error instanceof Error ? error.message : String(error),
+  // Hooked once per process, not once per driver: closeDriver() closes
+  // whichever driver is current, and hooking every build piled listeners up
+  // in a process that closes and reconnects.
+  if (!shutdownHooked) {
+    shutdownHooked = true;
+    // process.once expects a void-returning listener. Handing it an async
+    // function meant a failed close rejected with nobody listening, which Node
+    // turns into a hard exit on unhandled rejection.
+    const onShutdown = () => {
+      void closeDriver().catch((error: unknown) => {
+        logger.warn("neo4j driver close failed during shutdown", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
-  };
-  process.once("SIGINT", onShutdown);
-  process.once("SIGTERM", onShutdown);
-  process.once("beforeExit", onShutdown);
+    };
+    process.once("SIGINT", onShutdown);
+    process.once("SIGTERM", onShutdown);
+    process.once("beforeExit", onShutdown);
+  }
 
   return { neo4j, driver };
 }
