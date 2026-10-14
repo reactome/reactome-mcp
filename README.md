@@ -189,19 +189,40 @@ timeouts, so the file has exactly the structure of the `reactome://graph/schema`
 resource. It does not need `MCP_ALLOW_CYPHER` — it is a command an operator runs
 by hand, not a server, and it publishes nothing. It refuses to write a schema
 with sections it could not read, since a saved schema would keep that gap for as
-long as it is used.
+long as it is used, or one whose body disagrees with its own fingerprint, which
+means the database was written to during the run. Usage errors name the flag at
+most and never echo a value.
 
 **The file is only served against the database it came from.** Every schema
-carries a `source` fingerprint — Neo4j version and edition, the Reactome release
-from the graph's `DBInfo` node (absent on a graph without one), total node and
-relationship counts, and when it was taken — and a `schemaFormat` number. On its
-first schema request the server reads the same fingerprint from the live
-database (four cheap queries, not the full extraction) and serves the file only
-if they agree and the format is one it reads. Otherwise — another release, a
-database that has gained or lost a node, an older format, a file that is missing
-or is not valid JSON — it logs a warning naming the difference and extracts the
-schema live, as if no file were set. With graph access off, `NEO4J_SCHEMA_FILE`
-is not read at all.
+carries a `schemaFormat` number (currently `2`) and a `source` fingerprint:
+
+- Neo4j version and edition, and the name of the database actually connected to
+- the Reactome release from the graph's `DBInfo` node (absent on a graph without one)
+- total node and relationship counts
+- digests of the label, relationship type and property key lists, and of the
+  indexes (name, labels, properties, state) and constraints
+- when it was taken (recorded, not compared)
+
+On its first schema request the server reads the same fingerprint from the live
+database — metadata procedures and count-store lookups, nothing that scans the
+nodes or their properties, rather than the full extraction — and serves the
+file only if every field agrees, the format is one it reads, and the file agrees
+with its own fingerprint. When it does, it logs `graph schema served from file`
+with the file, release and database. Otherwise it logs a warning naming the
+difference and extracts the schema live, as if no file were set. With graph
+access off, `NEO4J_SCHEMA_FILE` is not read at all.
+
+| Detected (the file is not used) | Not detected (the file is still used) |
+|---|---|
+| another release, database or Neo4j version | a property's value changing |
+| a node or relationship added or removed | a property's value type changing (say, a string becoming a list) |
+| a new label, relationship type or property key (`SET n.newProp`) | an existing property key set on nodes that lacked it |
+| an index or constraint created, dropped or no longer online | one node deleted and another added with the same labels, keys and totals |
+| an older format, or a missing, malformed or self-contradictory file | a property key no longer used anywhere — Neo4j keeps key tokens once created |
+
+So a snapshot is safe against a different database and against most structural
+edits, but it is a fingerprint, not a proof: after edits that only change
+values, re-run `extract-schema` or unset `NEO4J_SCHEMA_FILE`.
 
 **From the release pipeline.** Once a release's graph database image is built,
 the same command against a container started from it produces a schema that can
@@ -242,8 +263,11 @@ To skip the extraction on later starts, save your database's schema with
 `extract-schema` and set `NEO4J_SCHEMA_FILE` to it. The fingerprint check is
 what makes this safe to get wrong: a schema saved from the release graph will
 not match your database, so it is not used against it, and nor is your own
-snapshot once your database has changed since it was taken — in both cases the
-server warns and reads the schema live.
+snapshot once your database has changed in a way the fingerprint sees — a node
+or relationship added or removed, a new label, relationship type or property
+key, an index or constraint changed. In those cases the server warns and reads
+the schema live. Edits that only change property values or their types are
+**not** seen (see the table above); after those, re-run `extract-schema`.
 
 ## Usage
 
