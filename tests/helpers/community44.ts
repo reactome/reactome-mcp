@@ -26,6 +26,9 @@ export function community44(
     if (query.includes("dbms.components"))
       return [{ name: "Neo4j Kernel", versions: ["4.4.40"], edition: "community" }];
     if (query.includes("DBInfo")) return [{ releaseNumber: 97 }];
+    if (query.includes("db.info")) return [{ name: "neo4j" }];
+    if (query.includes("db.propertyKeys"))
+      return [{ propertyKey: "stId" }, { propertyKey: "dbId" }, { propertyKey: "stoichiometry" }];
     if (query.includes("db.labels")) return [{ label: "Pathway" }, { label: "Reaction" }];
     if (query.includes("db.relationshipTypes"))
       return [{ relationshipType: "hasEvent" }, { relationshipType: "input" }];

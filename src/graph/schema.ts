@@ -4,6 +4,9 @@ import { neo4jSchemaFile } from "../config.js";
 import { logger } from "../logger.js";
 import { GRAPH_ACCESS_OFF, isGraphAccessEnabled } from "./gate.js";
 import {
+  digestConstraints,
+  digestIndexes,
+  digestNames,
   parseSchemaSnapshot,
   SCHEMA_FORMAT,
   sourceMismatches,
@@ -188,38 +191,76 @@ const REL_TOTAL = "MATCH ()-[r]->() RETURN count(r) AS count";
 // the same answer every time.
 const RELEASE =
   "MATCH (d:DBInfo) RETURN d.releaseNumber AS releaseNumber ORDER BY releaseNumber DESC LIMIT 1";
+const DATABASE = "CALL db.info() YIELD name RETURN name";
+const LABELS = "CALL db.labels() YIELD label RETURN label";
+const REL_TYPES = "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType";
+const PROPERTY_KEYS = "CALL db.propertyKeys() YIELD propertyKey RETURN propertyKey";
+
+const fetchIndexes = () =>
+  firstThatWorks<GraphSchema["indexes"][number]>([
+    "SHOW INDEXES YIELD name, type, entityType, labelsOrTypes, properties, state RETURN name, type, entityType, labelsOrTypes, properties, state",
+    "CALL db.indexes() YIELD name, type, entityType, labelsOrTypes, properties, state RETURN name, type, entityType, labelsOrTypes, properties, state",
+  ]);
+
+const fetchConstraints = () =>
+  firstThatWorks<GraphSchema["constraints"][number]>([
+    "SHOW CONSTRAINTS YIELD name, type, entityType, labelsOrTypes, properties RETURN name, type, entityType, labelsOrTypes, properties",
+    "CALL db.constraints() YIELD name, description RETURN name, description",
+  ]);
 
 /**
- * The cheap part of the schema that identifies the database: four queries,
- * none of which scans. This is what a saved schema is checked against before
- * it is served; see `schema-source.ts`.
+ * The cheap part of the schema that identifies the database: metadata reads
+ * and count-store lookups, none of which scans nodes or their properties.
+ * This is what a saved schema is checked against before it is served; what
+ * it catches and what it cannot is set out in `schema-source.ts`.
  */
 export async function fetchSourceFingerprint(): Promise<SchemaSource> {
-  const [components, release, nodeTotal, relTotal] = await Promise.all([
+  const [
+    components,
+    database,
+    release,
+    nodeTotal,
+    relTotal,
+    labels,
+    relTypes,
+    propertyKeys,
+    indexes,
+    constraints,
+  ] = await Promise.all([
     firstThatWorks<{ versions?: string[]; edition?: string }>([COMPONENTS]),
+    firstThatWorks<{ name: string }>([DATABASE]),
     firstThatWorks<{ releaseNumber: unknown }>([RELEASE]),
     firstThatWorks<{ count: number }>([NODE_TOTAL]),
     firstThatWorks<{ count: number }>([REL_TOTAL]),
+    firstThatWorks<{ label: string }>([LABELS]),
+    firstThatWorks<{ relationshipType: string }>([REL_TYPES]),
+    firstThatWorks<{ propertyKey: string }>([PROPERTY_KEYS]),
+    fetchIndexes(),
+    fetchConstraints(),
   ]);
   const releaseNumber = release[0]?.releaseNumber;
   return {
     neo4jVersion: components[0]?.versions?.[0] ?? null,
     neo4jEdition: components[0]?.edition ?? null,
+    database: database[0]?.name ?? null,
     ...(typeof releaseNumber === "number" || typeof releaseNumber === "string"
       ? { releaseNumber }
       : {}),
     nodeCount: Number(nodeTotal[0]?.count ?? 0),
     relCount: Number(relTotal[0]?.count ?? 0),
+    labelsDigest: digestNames(labels.map(r => r.label)),
+    relationshipTypesDigest: digestNames(relTypes.map(r => r.relationshipType)),
+    propertyKeysDigest: digestNames(propertyKeys.map(r => r.propertyKey)),
+    indexesDigest: digestIndexes(indexes),
+    constraintsDigest: digestConstraints(constraints),
     generatedAt: new Date().toISOString(),
   };
 }
 
 async function fetchStats(): Promise<GraphSchema["stats"]> {
   const [labelRows, relRows, nodeTotal, relTotal] = await Promise.all([
-    firstThatWorks<{ label: string }>(["CALL db.labels() YIELD label RETURN label"]),
-    firstThatWorks<{ relationshipType: string }>([
-      "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType",
-    ]),
+    firstThatWorks<{ label: string }>([LABELS]),
+    firstThatWorks<{ relationshipType: string }>([REL_TYPES]),
     firstThatWorks<{ count: number }>([NODE_TOTAL]),
     firstThatWorks<{ count: number }>([REL_TOTAL]),
   ]);
@@ -293,16 +334,8 @@ const SECTIONS: { [K in Section]: () => Promise<GraphSchema[K]> } = {
       .filter(r => r.propertyName != null)
       .map(r => ({ ...r, relType: bareRelType(r.relType) }));
   },
-  indexes: () =>
-    firstThatWorks([
-      "SHOW INDEXES YIELD name, type, entityType, labelsOrTypes, properties, state RETURN name, type, entityType, labelsOrTypes, properties, state",
-      "CALL db.indexes() YIELD name, type, entityType, labelsOrTypes, properties, state RETURN name, type, entityType, labelsOrTypes, properties, state",
-    ]),
-  constraints: () =>
-    firstThatWorks([
-      "SHOW CONSTRAINTS YIELD name, type, entityType, labelsOrTypes, properties RETURN name, type, entityType, labelsOrTypes, properties",
-      "CALL db.constraints() YIELD name, description RETURN name, description",
-    ]),
+  indexes: fetchIndexes,
+  constraints: fetchConstraints,
 };
 
 const EMPTY: Omit<GraphSchema, "fetchedAt" | "unavailable"> = {
@@ -356,7 +389,8 @@ export async function fetchGraphSchema(): Promise<GraphSchema> {
         logger.info("graph schema served from file", {
           file,
           durationMs: Date.now() - start,
-          releaseNumber: saved.source?.releaseNumber,
+          releaseNumber: saved.source?.releaseNumber ?? null,
+          database: saved.source?.database ?? null,
           nodeCount: saved.stats.nodeCount,
         });
         schemaCache = { schema: saved, at: Date.now() };

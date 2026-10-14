@@ -69,15 +69,42 @@ describe("fetchGraphSchema on Neo4j 4.4 Community without APOC", () => {
     // from; the fingerprint is how a reader tells.
     const schema = await fetchGraphSchema();
     expect(schema.schemaFormat).toBe(SCHEMA_FORMAT);
+    const digest = expect.stringMatching(/^[0-9a-f]{64}$/);
     expect(schema.source).toEqual({
       neo4jVersion: "4.4.40",
       neo4jEdition: "community",
+      database: "neo4j",
       releaseNumber: 97,
       nodeCount: 3_000_000,
       relCount: 12_000_000,
+      labelsDigest: digest,
+      relationshipTypesDigest: digest,
+      propertyKeysDigest: digest,
+      indexesDigest: digest,
+      constraintsDigest: digest,
       generatedAt: expect.any(String),
     });
     expect(Number.isNaN(Date.parse(schema.source?.generatedAt ?? ""))).toBe(false);
+  });
+
+  it("is format 2: format 1 files carried no metadata digests", () => {
+    expect(SCHEMA_FORMAT).toBe(2);
+  });
+
+  it("digests each metadata list in a canonical order, so the order the database answers in does not matter", async () => {
+    const first = (await fetchGraphSchema()).source;
+    _resetGraphSchemaCache();
+    fake.respond = community44({
+      "db.labels": () => [{ label: "Reaction" }, { label: "Pathway" }],
+      "db.propertyKeys": () => [
+        { propertyKey: "stoichiometry" },
+        { propertyKey: "dbId" },
+        { propertyKey: "stId" },
+      ],
+    });
+    const second = (await fetchGraphSchema()).source;
+    expect(second?.labelsDigest).toBe(first?.labelsDigest);
+    expect(second?.propertyKeysDigest).toBe(first?.propertyKeysDigest);
   });
 
   it("leaves the release out, rather than guessing, where there is no DBInfo node", async () => {
@@ -143,8 +170,10 @@ describe("fetchGraphSchema on Neo4j 4.4 Community without APOC", () => {
     const schema = await fetchGraphSchema();
     expect(schema.nodeTypeProperties).toEqual([]);
     expect(schema.indexes).toEqual([]);
+    // The fingerprint digests the index list, so without one there is no
+    // fingerprint either -- and no saved schema could be verified against it.
     expect(schema.unavailable.map(u => u.section).sort()).toEqual(
-      ["indexes", "nodeTypeProperties"].sort()
+      ["indexes", "nodeTypeProperties", "source"].sort()
     );
     // The rest is intact.
     expect(schema.stats.labels.Pathway).toBe(2_000);
@@ -247,9 +276,15 @@ function minimalSchema(): GraphSchema {
     source: {
       neo4jVersion: "4.4.40",
       neo4jEdition: "community",
+      database: "neo4j",
       releaseNumber: 97,
       nodeCount: 100,
       relCount: 200,
+      labelsDigest: "0".repeat(64),
+      relationshipTypesDigest: "0".repeat(64),
+      propertyKeysDigest: "0".repeat(64),
+      indexesDigest: "0".repeat(64),
+      constraintsDigest: "0".repeat(64),
       generatedAt: "2026-10-14T15:00:00Z",
     },
     dbComponents: [{ name: "Neo4j Kernel", versions: ["4.4.40"], edition: "community" }],

@@ -1,6 +1,7 @@
 import { rename, rm, writeFile } from "node:fs/promises";
 import { closeDriver } from "../clients/neo4j.js";
 import { fetchGraphSchema } from "../graph/schema.js";
+import { schemaInconsistencies } from "../graph/schema-source.js";
 
 /**
  * `reactome-mcp extract-schema` -- write a database's graph schema to JSON.
@@ -27,6 +28,12 @@ import { fetchGraphSchema } from "../graph/schema.js";
  *
  * A schema with unavailable sections is not written: a saved schema is served
  * for as long as its database matches, so a gap in it would never be filled.
+ * Nor is one whose body disagrees with its own fingerprint -- the database
+ * was written to while it was read -- since the server would refuse it.
+ *
+ * **No value is ever echoed.** A usage error names the flag at most: a
+ * mistyped `--password` is the likeliest mistake, and its value the
+ * password.
  *
  * Returns the exit code: 0 written, 1 extraction or write failed, 2 usage.
  */
@@ -62,6 +69,9 @@ type ValueFlag = (typeof VALUE_FLAGS)[number];
 
 class UsageError extends Error {}
 
+/** A name an environment variable can have; anything else is not echoed. */
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 function parse(args: string[]): { help: boolean; values: Partial<Record<ValueFlag, string>> } {
   const values: Partial<Record<ValueFlag, string>> = {};
   let help = false;
@@ -79,12 +89,25 @@ function parse(args: string[]): { help: boolean; values: Partial<Record<ValueFla
           "variable named by --password-env."
       );
     }
+    if (!arg.startsWith("-")) {
+      throw new UsageError(
+        "unexpected value on the command line (not shown); every value follows its flag"
+      );
+    }
     const eq = arg.indexOf("=");
     const flag = (eq > 0 ? arg.slice(0, eq) : arg) as ValueFlag;
-    if (!VALUE_FLAGS.includes(flag)) throw new UsageError(`unknown argument: ${arg}`);
+    // The flag only: what follows `=` may be a secret.
+    if (!VALUE_FLAGS.includes(flag)) throw new UsageError(`unknown option: ${flag}`);
     const value = eq > 0 ? arg.slice(eq + 1) : args[++i];
     if (value === undefined || value === "" || (eq < 0 && value.startsWith("--"))) {
       throw new UsageError(`${flag} needs a value`);
+    }
+    if (flag === "--password-env" && !ENV_NAME.test(value)) {
+      // Most likely the password itself, given where a variable name goes.
+      throw new UsageError(
+        "--password-env takes the name of an environment variable, and what was given " +
+          "(not shown) is not a valid environment variable name"
+      );
     }
     values[flag] = value;
   }
@@ -136,6 +159,17 @@ export async function runExtractSchema(args: string[], io: CliIo = processIo): P
       io.stderr(
         "extract-schema: not written; these sections could not be read:\n" +
           schema.unavailable.map(u => `  ${u.section}: ${u.reason}\n`).join("")
+      );
+      return 1;
+    }
+    const inconsistent = schema.source
+      ? schemaInconsistencies({ ...schema, source: schema.source })
+      : [];
+    if (inconsistent.length > 0) {
+      io.stderr(
+        "extract-schema: not written; the database changed while it was read, so the schema " +
+          "disagrees with its own fingerprint. Run it again when the database is quiet:\n" +
+          inconsistent.map(d => `  ${d}\n`).join("")
       );
       return 1;
     }

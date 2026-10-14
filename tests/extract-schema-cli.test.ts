@@ -194,6 +194,44 @@ describe("reactome-mcp extract-schema", () => {
     expect(fake.drivers).toHaveLength(0);
   });
 
+  describe("never echoes a value it was given", () => {
+    // Usage errors go to a terminal, a CI log, a ticket. A mistyped flag is
+    // most likely a mistyped --password, and its value the password.
+    it.each([
+      [["--uri", URI, "--passwd=hunter2"], "--passwd"],
+      [["--uri", URI, "--passwd", "hunter2"], "--passwd"],
+      [["--uri", URI, "--user", "neo4j", "hunter2"], "unexpected value"],
+      [["hunter2", "--uri", URI], "unexpected value"],
+      [["--uri", URI, "--password-env", "hunter2!"], "not a valid environment variable name"],
+      [["--uri", URI, "--password-env=hunter 2"], "not a valid environment variable name"],
+    ])("%j", async (args, said) => {
+      expect(await run(...args)).toBe(2);
+      expect(err.join("")).toContain(said);
+      expect(err.join("")).not.toContain("hunter");
+      expect(fake.drivers).toHaveLength(0);
+    });
+
+    it("names a well-formed --password-env variable that is unset", async () => {
+      expect(await run("--uri", URI, "--password-env", "SNAPSHOT_PW")).toBe(2);
+      expect(err.join("")).toContain("SNAPSHOT_PW");
+    });
+  });
+
+  it("refuses to write a schema of a database that changed while it was read", async () => {
+    // The fingerprint and the body are read by separate queries; a curator
+    // writing meanwhile makes them disagree, and the server would refuse the
+    // file. Better to say so now.
+    let calls = 0;
+    fake.respond = community44({
+      "MATCH (n) RETURN count(n)": () => [{ count: 3_000_000 + calls++ }],
+    });
+    const file = join(dir, "schema.json");
+    expect(await run("--uri", URI, "--out", file)).toBe(1);
+    expect(existsSync(file)).toBe(false);
+    expect(err.join("")).toMatch(/changed|disagree/i);
+    expect(err.join("")).toContain("nodeCount");
+  });
+
   it("prints usage for --help and connects to nothing", async () => {
     expect(await run("--help")).toBe(0);
     expect(out.join("")).toContain("--password-env");

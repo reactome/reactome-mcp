@@ -32,15 +32,15 @@ import { SCHEMA_FORMAT } from "../src/graph/schema-source.js";
 import { closeDriver } from "../src/clients/neo4j.js";
 import { logger } from "../src/logger.js";
 
-/** What only the full extraction runs. None of it may run when the file is used. */
+/**
+ * What only the full extraction runs. None of it may run when the file is
+ * used. (Token lists, indexes and constraints are part of the fingerprint:
+ * metadata reads, not scans.)
+ */
 const EXPENSIVE = [
   "db.schema.nodeTypeProperties",
   "db.schema.relTypeProperties",
   "db.schema.visualization",
-  "db.labels",
-  "db.relationshipTypes",
-  "SHOW INDEXES",
-  "SHOW CONSTRAINTS",
   "UNION ALL",
 ];
 const expensiveRun = () => queriesRun(fake).filter(q => EXPENSIVE.some(e => q.includes(e)));
@@ -48,6 +48,7 @@ const expensiveRun = () => queriesRun(fake).filter(q => EXPENSIVE.some(e => q.in
 let dir: string;
 let snapshot: GraphSchema;
 let warn: MockInstance<typeof logger.warn>;
+let info: MockInstance<typeof logger.info>;
 
 /** A snapshot of the scripted database, taken by the extractor itself. */
 async function takeSnapshot(): Promise<GraphSchema> {
@@ -78,10 +79,12 @@ describe("NEO4J_SCHEMA_FILE", () => {
     dir = mkdtempSync(join(tmpdir(), "schema-file-"));
     snapshot = await takeSnapshot();
     warn = vi.spyOn(logger, "warn");
+    info = vi.spyOn(logger, "info");
   });
 
   afterEach(async () => {
     warn.mockRestore();
+    info.mockRestore();
     _resetGraphSchemaCache();
     await closeDriver();
     rmSync(dir, { recursive: true, force: true });
@@ -103,6 +106,13 @@ describe("NEO4J_SCHEMA_FILE", () => {
     expect(run.some(q => q.includes("DBInfo"))).toBe(true);
     for (const s of fake.sessions) expect(s.config.defaultAccessMode).toBe("READ");
     expect(warnings()).toEqual([]);
+    // And says so: which file, for which release, on which database.
+    const served = info.mock.calls.find(([msg]) => /served from file/.test(msg));
+    expect(served?.[1]).toMatchObject({
+      file: expect.stringContaining("schema.json"),
+      releaseNumber: 97,
+      database: "neo4j",
+    });
 
     // Complete, so cached: a second call runs nothing at all.
     const before = queriesRun(fake).length;
@@ -156,6 +166,129 @@ describe("NEO4J_SCHEMA_FILE", () => {
           { name: "Neo4j Kernel", versions: ["5.26.0"], edition: "community" },
         ],
       },
+      reason: /neo4jVersion/,
+    },
+    // Changes a curator makes that leave both totals as they were.
+    {
+      name: "a new property key (SET n.newProp on an existing node)",
+      db: {
+        "db.propertyKeys": () => [
+          { propertyKey: "stId" },
+          { propertyKey: "dbId" },
+          { propertyKey: "stoichiometry" },
+          { propertyKey: "newProp" },
+        ],
+      },
+      reason: /propertyKeys/,
+    },
+    {
+      name: "a new label",
+      db: { "db.labels": () => [{ label: "Pathway" }, { label: "Reaction" }, { label: "New" }] },
+      reason: /labels/,
+    },
+    {
+      name: "a new relationship type",
+      db: {
+        "db.relationshipTypes": () => [
+          { relationshipType: "hasEvent" },
+          { relationshipType: "input" },
+          { relationshipType: "output" },
+        ],
+      },
+      reason: /relationshipTypes/,
+    },
+    {
+      name: "a new index (CREATE INDEX)",
+      db: {
+        "SHOW INDEXES": () => [
+          {
+            name: "index_pathway_stId",
+            type: "BTREE",
+            entityType: "NODE",
+            labelsOrTypes: ["Pathway"],
+            properties: ["stId"],
+            state: "ONLINE",
+          },
+          {
+            name: "index_new",
+            type: "BTREE",
+            entityType: "NODE",
+            labelsOrTypes: ["Reaction"],
+            properties: ["stId"],
+            state: "ONLINE",
+          },
+        ],
+      },
+      reason: /indexes/,
+    },
+    {
+      name: "an index that is no longer online",
+      db: {
+        "SHOW INDEXES": () => [
+          {
+            name: "index_pathway_stId",
+            type: "BTREE",
+            entityType: "NODE",
+            labelsOrTypes: ["Pathway"],
+            properties: ["stId"],
+            state: "POPULATING",
+          },
+        ],
+      },
+      reason: /indexes/,
+    },
+    {
+      name: "a dropped constraint",
+      db: { "SHOW CONSTRAINTS": () => [] },
+      reason: /constraints/,
+    },
+    {
+      name: "another database on the same server",
+      db: { "db.info": () => [{ name: "curation" }] },
+      reason: /database/,
+    },
+    {
+      name: "a format 1 file, which carried no metadata digests",
+      file: s => ({ ...s, schemaFormat: 1 }),
+      reason: /schemaFormat/,
+    },
+    // Files that disagree with themselves.
+    {
+      name: "stats.nodeCount that disagrees with the fingerprint",
+      file: s => ({ ...s, stats: { ...s.stats, nodeCount: s.stats.nodeCount + 1 } }),
+      reason: /nodeCount/,
+    },
+    {
+      name: "stats.relCount that disagrees with the fingerprint",
+      file: s => ({ ...s, stats: { ...s.stats, relCount: 0 } }),
+      reason: /relCount/,
+    },
+    {
+      name: "a label list that disagrees with the fingerprint",
+      file: s => ({ ...s, stats: { ...s.stats, labels: { ...s.stats.labels, Extra: 1 } } }),
+      reason: /labels/,
+    },
+    {
+      name: "a relationship type list that disagrees with the fingerprint",
+      file: s => ({ ...s, stats: { ...s.stats, relTypesCount: { hasEvent: 9_000 } } }),
+      reason: /relationshipTypes/,
+    },
+    {
+      name: "an index list that disagrees with the fingerprint",
+      file: s => ({ ...s, indexes: [] }),
+      reason: /indexes/,
+    },
+    {
+      name: "a constraint list that disagrees with the fingerprint",
+      file: s => ({ ...s, constraints: [] }),
+      reason: /constraints/,
+    },
+    {
+      name: "a Neo4j version that disagrees with the fingerprint",
+      file: s => ({
+        ...s,
+        dbComponents: [{ name: "Neo4j Kernel", versions: ["5.0.0"], edition: "community" }],
+      }),
       reason: /neo4jVersion/,
     },
     {
