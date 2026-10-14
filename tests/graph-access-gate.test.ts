@@ -23,6 +23,7 @@ import type { FakeNeo4jState } from "./helpers/fake-neo4j.js";
  */
 
 const fake = vi.hoisted((): FakeNeo4jState => ({ drivers: [], sessions: [], respond: () => [] }));
+const SLOW_DRIVER_LOAD_MS = 60;
 
 /**
  * Registered per test, after `vi.resetModules()`, rather than once with
@@ -34,6 +35,10 @@ const fake = vi.hoisted((): FakeNeo4jState => ({ drivers: [], sessions: [], resp
 function mockDriverModule() {
   vi.doMock("neo4j-driver", async () => {
     const { fakeNeo4jModule } = await import("./helpers/fake-neo4j.js");
+    // Loaded slowly on purpose, as it is on a busy CI runner: a test that
+    // asserts after a fixed wait instead of after the work it started has
+    // finished fails here every time, rather than once in a while in CI.
+    await new Promise(resolve => setTimeout(resolve, SLOW_DRIVER_LOAD_MS));
     return fakeNeo4jModule(fake);
   });
   mockFileReads();
@@ -163,9 +168,43 @@ function resetFake() {
   fileReads.length = 0;
 }
 
-/** Let fire-and-forget startup work (the schema warm-up) run to completion. */
-async function settle() {
-  for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 5));
+/**
+ * Wait until the entrypoint imported in this test has asked for the schema
+ * warm-up, and that warm-up -- if it started one -- has finished. Waits for
+ * the work itself, not for a length of time: a fixed wait passed locally and
+ * failed under load in CI, where the warm-up's driver build landed in the
+ * next test. Bounded, so a startup that never gets there fails here.
+ *
+ * Imported after the entrypoint, from the same module registry, so it is the
+ * entrypoint's own copy of the warm-up module.
+ */
+async function startupSettled() {
+  const { _graphSchemaWarmup } = await import("../src/graph/warmup.js");
+  await vi.waitFor(
+    () => {
+      if (_graphSchemaWarmup().calls === 0) throw new Error("the entrypoint has not started up");
+    },
+    { timeout: 5_000, interval: 5 }
+  );
+  await _graphSchemaWarmup().pending;
+}
+
+/**
+ * Run after every test, before its modules are dropped: a warm-up still
+ * running would finish during the next test and be counted there. One left
+ * behind is awaited -- so it cannot leak -- and then fails the test that
+ * left it.
+ */
+async function noWarmupLeftRunning() {
+  const { _graphSchemaWarmup } = await import("../src/graph/warmup.js");
+  const { closeDriver } = await import("../src/clients/neo4j.js");
+  const { pending } = _graphSchemaWarmup();
+  if (pending) {
+    await pending;
+    await closeDriver();
+    throw new Error("the test ended with a schema warm-up still running");
+  }
+  await closeDriver();
 }
 
 const cypherNames = (names: string[]) => names.filter(n => n.startsWith("reactome_cypher"));
@@ -196,10 +235,14 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
     mockDriverModule();
   });
 
-  afterEach(() => {
-    restoreEnv();
-    vi.doUnmock("../src/http.js");
-    vi.resetModules();
+  afterEach(async () => {
+    try {
+      await noWarmupLeftRunning();
+    } finally {
+      restoreEnv();
+      vi.doUnmock("../src/http.js");
+      vi.resetModules();
+    }
   });
 
   it(`the shared predicate reports ${open ? "open" : "closed"}`, async () => {
@@ -303,7 +346,7 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
 
   it(`the stdio entrypoint ${open ? "warms the schema over one driver" : "never constructs a driver"}`, async () => {
     await import("../src/index.js");
-    await settle();
+    await startupSettled();
     expect(fake.drivers).toHaveLength(open ? 1 : 0);
     // A closed instance never loads neo4j-driver at all.
     expect(fake.moduleLoads).toBe(open ? 1 : 0);
@@ -325,7 +368,7 @@ describe.each(CASES)("graph access gate: $name", ({ env, open }) => {
     vi.doMock("../src/http.js", () => ({ startHttpServer: vi.fn(async () => ({})) }));
     process.env.MCP_HTTP_PORT = "4999";
     await import("../src/http-server.js");
-    await settle();
+    await startupSettled();
     expect(fake.drivers).toHaveLength(open ? 1 : 0);
     expect(fake.moduleLoads).toBe(open ? 1 : 0);
     expect(snapshotReads()).toBe(open ? 1 : 0);
@@ -414,9 +457,13 @@ describe("graph access gate: open, but the cypher group withheld", () => {
     mockDriverModule();
   });
 
-  afterEach(() => {
-    restoreEnv();
-    vi.resetModules();
+  afterEach(async () => {
+    try {
+      await noWarmupLeftRunning();
+    } finally {
+      restoreEnv();
+      vi.resetModules();
+    }
   });
 
   it("offers nothing graph-shaped and opens no connection for nobody", async () => {
@@ -431,7 +478,7 @@ describe("graph access gate: open, but the cypher group withheld", () => {
     // Without the tools or the resource nothing can read a warmed cache, so
     // the warm-up must not connect.
     await import("../src/index.js");
-    await settle();
+    await startupSettled();
     expect(fake.drivers).toHaveLength(0);
     expect(snapshotReads()).toBe(0);
   });
@@ -539,8 +586,15 @@ describe("graph access gate: the extract-schema subcommand", () => {
     process.argv = [argv[0] ?? "node", "dist/index.js", "extract-schema", "--help"];
 
     await import("../src/index.js");
-    await settle();
+    // The dispatch is asynchronous; wait for it to finish, not for a time.
+    await vi.waitFor(
+      () => {
+        if (process.exitCode === undefined) throw new Error("extract-schema has not finished");
+      },
+      { timeout: 5_000, interval: 5 }
+    );
 
+    expect(process.exitCode).toBe(0);
     expect(runExtractSchema).toHaveBeenCalledWith(["--help"]);
     expect(createServer).not.toHaveBeenCalled();
     expect(fake.drivers).toHaveLength(0);

@@ -15,7 +15,11 @@ import { GRAPH_GROUP, resolveToolGroups } from "../tools/index.js";
  * The decision lives here rather than at each call site, so every entrypoint
  * makes the same one.
  */
+let warmupCalls = 0;
+let warmupPending: Promise<void> | null = null;
+
 export function warmGraphSchema(): void {
+  warmupCalls++;
   let offered: boolean;
   try {
     offered = resolveToolGroups().includes(GRAPH_GROUP);
@@ -35,9 +39,26 @@ export function warmGraphSchema(): void {
     return;
   }
 
-  fetchGraphSchema().catch((error: unknown) => {
-    logger.warn("graph schema warm-up failed; will retry on first use", {
-      error: error instanceof Error ? error.message : String(error),
+  const pending: Promise<void> = fetchGraphSchema()
+    .then(() => undefined)
+    .catch((error: unknown) => {
+      logger.warn("graph schema warm-up failed; will retry on first use", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    })
+    .finally(() => {
+      if (warmupPending === pending) warmupPending = null;
     });
-  });
+  warmupPending = pending;
+}
+
+/**
+ * For tests: how many times an entrypoint has asked for the warm-up, and the
+ * warm-up still running, if one is. Entrypoints start it without waiting, so
+ * a test that asserts on what it did must wait for exactly this rather than
+ * for a fixed time -- on a busy machine a fixed time is too short, and the
+ * work lands in whichever test runs next. The promise never rejects.
+ */
+export function _graphSchemaWarmup(): { calls: number; pending: Promise<void> | null } {
+  return { calls: warmupCalls, pending: warmupPending };
 }
